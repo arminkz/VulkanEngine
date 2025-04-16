@@ -2,9 +2,6 @@
 #include "stdafx.h"
 #include "VulkanHelper.h"
 
-#define STB_IMAGE_IMPLEMENTATION
-#include "stb_image.h"
-
 #include "loader/ObjLoader.h"
 #include "geometry/Vertex.h"
 #include "geometry/Mesh.h"

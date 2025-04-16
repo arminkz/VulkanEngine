@@ -11,11 +11,11 @@ namespace MeshFactory {
         // Generate vertices and texture coordinates
         for (int y = 0; y <= rings; ++y) {
             float v = (float)y / rings;
-            float theta = v * std::_Pi; // from 0 to PI
+            float theta = v * glm::pi<float>(); // from 0 to PI
 
             for (int x = 0; x <= segments; ++x) {
                 float u = (float)x / segments;
-                float phi = u * 2.0f * std::_Pi; // from 0 to 2PI
+                float phi = u * 2.0f * glm::pi<float>(); // from 0 to 2PI
 
                 float sinTheta = std::sin(theta);
                 float cosTheta = std::cos(theta);
