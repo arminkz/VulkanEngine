@@ -4,7 +4,7 @@
 class Texture
 {
 public:
-    Texture(VulkanContext ctx, const std::string& path);
+    Texture(const VulkanContext& ctx, const std::string& path);
     ~Texture();
 
     void cleanup();
@@ -20,7 +20,7 @@ private:
     VkFormat _format;
     uint32_t _mipLevels;
     
-    VulkanContext _ctx;
+    const VulkanContext& _ctx;
     VkImage _textureImage;
     VkDeviceMemory _textureImageMemory;
     VkImageView _textureImageView;

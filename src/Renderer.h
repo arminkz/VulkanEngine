@@ -16,13 +16,9 @@ private:
     Mesh _mesh;
     std::unique_ptr<TurnTableCamera> _camera = nullptr;
 
-    VkInstance _instance = nullptr;
-    VkPhysicalDevice _physicalDevice = nullptr;
-    VkDevice _device = nullptr;
-    VkSurfaceKHR _surface = nullptr;
+    VulkanContext _ctx;
 
-    VkQueue _graphicsQueue;
-    VkQueue _presentQueue;
+    VkSurfaceKHR _surface = nullptr;
 
     VkSwapchainKHR _swapChain = nullptr;
     VkFormat _swapChainImageFormat;
@@ -48,12 +44,6 @@ private:
     std::vector<VkDeviceMemory> _uniformBuffersMemory;
     std::vector<void*> _uniformBuffersMapped;
 
-    uint32_t _mipLevels;
-    VkImage _textureImage;
-    VkDeviceMemory _textureImageMemory;
-    VkImageView _textureImageView;
-    VkSampler _textureSampler;
-
     VkSampleCountFlagBits _msaaSamples = VK_SAMPLE_COUNT_1_BIT;
     VkImage _colorImage;
     VkDeviceMemory _colorImageMemory;
@@ -63,7 +53,7 @@ private:
     VkDeviceMemory _depthImageMemory;
     VkImageView _depthImageView;
 
-    VkCommandPool _commandPool;
+    //VkCommandPool _commandPool;
     std::vector<VkCommandBuffer> _commandBuffers;
 
     std::vector<VkSemaphore> _imageAvailableSemaphores;
@@ -85,14 +75,22 @@ private:
         void* pUserData);
     
 
+    void createVulkanContext();
+    //-------------------------
     bool createVulkanInstance();
+    bool pickPhysicalDevice();
+    bool createLogicalDevice();
+    bool createCommandPool();
+    //-------------------------
+
+
     bool createSurface();
 
     bool isDeviceSuitable(VkPhysicalDevice device);
-    bool pickPhysicalDevice();
+    
 
     QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device);
-    bool createLogicalDevice();
+    
 
     SwapChainSupportDetails querySwapChainSupport(VkPhysicalDevice device);
     VkSurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats);
@@ -112,15 +110,6 @@ private:
     bool createGraphicsPipeline();
 
     bool createFramebuffers();
-
-    uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
-    bool createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory);
-    bool copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
-    void copyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
-    
-    bool createImage(uint32_t width, uint32_t height, VkFormat format, uint32_t mipLevels, VkSampleCountFlagBits numSamples, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory);
-    VkImageView createImageView(VkImage image, VkFormat format, uint32_t mipLevels, VkImageAspectFlags aspectFlags);
-    void transitionImageLayout(VkImage image, VkFormat format, uint32_t mipLevels, VkImageLayout oldLayout, VkImageLayout newLayout);
     
     VkFormat findSupportedFormat(const std::vector<VkFormat>& candidates, VkImageTiling tiling, VkFormatFeatureFlags features);
     VkFormat findDepthFormat();
@@ -132,15 +121,10 @@ private:
     bool createUniformBuffers();
     void updateUniformBuffer(uint32_t currentImage);
 
-    bool createTextureImage();
-    bool createTextureImageView();
-    bool createTextureSampler();
-    void generateMipmaps(VkImage image, VkFormat imageFormat, uint32_t mipLevels, int32_t texWidth, int32_t texHeight);
-
     void createColorResources();
     void createDepthResources();
     
-    bool createCommandPool();
+    
     bool createCommandBuffers();
     void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
     VkCommandBuffer beginSingleTimeCommands();

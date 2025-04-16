@@ -4,7 +4,7 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
-Texture::Texture(VulkanContext ctx, const std::string& path): _ctx(ctx)
+Texture::Texture(const VulkanContext& ctx, const std::string& path): _ctx(ctx)
 {
     int texWidth, texHeight, texChannels;
     stbi_uc* pixels = stbi_load(path.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
@@ -93,6 +93,7 @@ Texture::Texture(VulkanContext ctx, const std::string& path): _ctx(ctx)
 
 Texture::~Texture()
 {
+    spdlog::info("Texture is getting destroyed...");
     cleanup();
 }
 

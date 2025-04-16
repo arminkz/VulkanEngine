@@ -3,7 +3,7 @@
 
 namespace VulkanHelper {
 
-    VkCommandBuffer beginSingleTimeCommands(VulkanContext ctx) {
+    VkCommandBuffer beginSingleTimeCommands(const VulkanContext& ctx) {
         VkCommandBufferAllocateInfo allocInfo = {};
         allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
         allocInfo.commandPool = ctx.commandPool;
@@ -21,7 +21,7 @@ namespace VulkanHelper {
         return commandBuffer;
     }
 
-    void endSingleTimeCommands(VulkanContext ctx, VkCommandBuffer commandBuffer) {
+    void endSingleTimeCommands(const VulkanContext& ctx, VkCommandBuffer commandBuffer) {
         vkEndCommandBuffer(commandBuffer);
 
         VkSubmitInfo submitInfo = {};
@@ -36,7 +36,7 @@ namespace VulkanHelper {
     }
 
 
-    uint32_t findMemoryType(VulkanContext ctx, uint32_t typeFilter, VkMemoryPropertyFlags properties) {
+    uint32_t findMemoryType(const VulkanContext& ctx, uint32_t typeFilter, VkMemoryPropertyFlags properties) {
         VkPhysicalDeviceMemoryProperties memProperties;
         vkGetPhysicalDeviceMemoryProperties(ctx.physicalDevice, &memProperties);
     
@@ -50,7 +50,7 @@ namespace VulkanHelper {
     }
 
 
-    void createBuffer(VulkanContext ctx, 
+    void createBuffer(const VulkanContext& ctx, 
                       VkDeviceSize size, 
                       VkBufferUsageFlags usage, 
                       VkMemoryPropertyFlags properties, 
@@ -76,7 +76,7 @@ namespace VulkanHelper {
         VkMemoryAllocateInfo allocInfo{};
         allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
         allocInfo.allocationSize = memRequirements.size;
-        allocInfo.memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits, properties);
+        allocInfo.memoryTypeIndex = findMemoryType(ctx, memRequirements.memoryTypeBits, properties);
         if (vkAllocateMemory(ctx.device, &allocInfo, nullptr, &bufferMemory) != VK_SUCCESS) {
             spdlog::error("Failed to allocate buffer memory!");
             return;
@@ -87,7 +87,7 @@ namespace VulkanHelper {
     }
 
 
-    void copyBuffer(VulkanContext ctx, 
+    void copyBuffer(const VulkanContext& ctx, 
                     VkBuffer srcBuffer, 
                     VkBuffer dstBuffer, 
                     VkDeviceSize size) 
@@ -106,7 +106,7 @@ namespace VulkanHelper {
     }
 
 
-    void copyBufferToImage(VulkanContext ctx, 
+    void copyBufferToImage(const VulkanContext& ctx, 
                            VkBuffer buffer, 
                            VkImage image, 
                            uint32_t width, 
@@ -133,7 +133,7 @@ namespace VulkanHelper {
     }
     
 
-    void createImage(VulkanContext ctx, 
+    void createImage(const VulkanContext& ctx, 
                      uint32_t width,
                      uint32_t height,
                      VkFormat format,
@@ -171,7 +171,7 @@ namespace VulkanHelper {
         VkMemoryAllocateInfo allocInfo{};
         allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
         allocInfo.allocationSize = memRequirements.size;
-        allocInfo.memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits, properties);
+        allocInfo.memoryTypeIndex = findMemoryType(ctx, memRequirements.memoryTypeBits, properties);
         if (vkAllocateMemory(ctx.device, &allocInfo, nullptr, &imageMemory) != VK_SUCCESS) {
             spdlog::error("Failed to allocate image memory!");
             return;
@@ -181,7 +181,7 @@ namespace VulkanHelper {
     }
 
 
-    VkImageView createImageView(VulkanContext ctx, 
+    VkImageView createImageView(const VulkanContext& ctx, 
                                 VkImage image, 
                                 VkFormat format, 
                                 uint32_t mipLevels, 
@@ -207,7 +207,7 @@ namespace VulkanHelper {
     }
 
 
-    void transitionImageLayout(VulkanContext ctx, 
+    void transitionImageLayout(const VulkanContext& ctx, 
                                VkImage image, 
                                VkFormat format, 
                                uint32_t mipLevels, 
