@@ -4,5 +4,7 @@
 
 class ObjLoader {
 public:
-    static Mesh load(const std::string& modelPath, const std::string& texturePath);
+    static Mesh load(const std::string& modelPath);
 };
+
+//TODO: change class to namespace!

@@ -1,10 +1,10 @@
 #include "TextureSampler.h"
 
-TextureSampler::TextureSampler(const VulkanContext& ctx)
+TextureSampler::TextureSampler(const VulkanContext& ctx, uint32_t mipLevels): _ctx(ctx)
 {
     // Retrieve the physical device properties for the texture sampler
     VkPhysicalDeviceProperties properties{};
-    vkGetPhysicalDeviceProperties(_physicalDevice, &properties);
+    vkGetPhysicalDeviceProperties(_ctx.physicalDevice, &properties);
 
     // Create texture sampler
     VkSamplerCreateInfo samplerInfo{};
@@ -23,15 +23,14 @@ TextureSampler::TextureSampler(const VulkanContext& ctx)
     samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
     samplerInfo.mipLodBias = 0.0f;
     samplerInfo.minLod = 0.0f;
-    samplerInfo.maxLod = static_cast<float>(_mipLevels);
+    samplerInfo.maxLod = static_cast<float>(mipLevels);
 
-    if(vkCreateSampler(_device, &samplerInfo, nullptr, &_textureSampler) != VK_SUCCESS) {
+    if(vkCreateSampler(_ctx.device, &samplerInfo, nullptr, &_textureSampler) != VK_SUCCESS) {
         spdlog::error("Failed to create texture sampler!");
-        return false;
     }
 }
 
 TextureSampler::~TextureSampler()
 {
-    vkDestroySampler(_device, _textureSampler, nullptr);
+    vkDestroySampler(_ctx.device, _textureSampler, nullptr);
 }

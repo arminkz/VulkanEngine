@@ -6,4 +6,7 @@ class Mesh {
 public:
     std::vector<Vertex> vertices;  // Vertex data
     std::vector<uint32_t> indices; // Index data
+    
+    Mesh() = default;
+    Mesh(const Mesh& other): vertices(other.vertices), indices(other.indices) {} // copy constructor
 };

@@ -42,7 +42,6 @@
 #include <thread>
 #include <filesystem>
 #include <streambuf>
-#include <format>
 #include <optional>
 
 // [Standard libraries: data structures]

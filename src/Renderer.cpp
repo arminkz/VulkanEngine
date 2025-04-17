@@ -51,7 +51,7 @@ Renderer::~Renderer()
     }
     
     cleanupSwapChain();
-    vkDestroySurfaceKHR(_ctx.instance, _surface, nullptr);
+    vkDestroySurfaceKHR(_ctx.instance, _ctx.surface, nullptr);
 
 
     // Destroy all members of VulkanContext
@@ -75,18 +75,21 @@ bool Renderer::initialize(SDL_Window* _window)
     // Store the window reference
     this->_window = _window;
 
-    // Load meesh data
-    //_mesh = ObjLoader::load("models/viking_room.obj", "textures/viking_room.png");
-    _mesh = MeshFactory::createSphereMesh(1.0f, 64, 64);
-    spdlog::info("Loaded {} vertices and {} indices", _mesh.vertices.size(), _mesh.indices.size());
-
     _camera = std::make_unique<TurnTableCamera>();
 
     // Create VulkanContext
     createVulkanContext();
 
-    // Create Vulkan surface
-    if(!createSurface()) return false;
+    // Model to render
+    // Load meesh data
+
+    Mesh mesh = MeshFactory::createSphereMesh(1.0f, 64, 64);
+    _model = std::make_unique<Model>(_ctx, mesh, "textures/8k_earth_daymap.jpg");
+    
+    //Mesh mesh = ObjLoader::load("models/viking_room.obj");
+    //_model = std::make_unique<Model>(_ctx, mesh, "textures/viking_room.png");
+
+    _textureSampler = std::make_unique<TextureSampler>(_ctx, _model->getTexture()->getMipLevels());
 
     _msaaSamples = getMaxMsaaSampleCount();
     spdlog::info("Max MSAA samples: {}", static_cast<int>(_msaaSamples));
@@ -168,11 +171,12 @@ void Renderer::setupDebugMessenger() {
 }
 
 
-// Functions to initialize VulkanContext
+// Functions to initialize VulkanContext (do we need to move this to VulkanContext??)
 void Renderer::createVulkanContext() 
 {
     createVulkanInstance();
     setupDebugMessenger();
+    createSurface();
     pickPhysicalDevice();
     createLogicalDevice();
     createCommandPool();
@@ -240,6 +244,17 @@ bool Renderer::createVulkanInstance() {
         return true;
 }
 
+bool Renderer::createSurface() {
+    // A surface is a platform-specific representation of the window where Vulkan will render its output.
+    // its a window tied to a swapchain.
+    if (!SDL_Vulkan_CreateSurface(_window, _ctx.instance, nullptr, &_ctx.surface)) {
+        spdlog::error("Failed to create Vulkan surface: {}", SDL_GetError());
+        return false;
+    }
+    spdlog::info("Vulkan surface created successfully");
+    return true;
+}
+
 bool Renderer::pickPhysicalDevice() {
     // Pick a suitable physical device
     uint32_t deviceCount = 0;
@@ -284,7 +299,7 @@ bool Renderer::createLogicalDevice() {
             graphicsFamily = i;
         }
         VkBool32 presentSupport = false;
-        vkGetPhysicalDeviceSurfaceSupportKHR(_ctx.physicalDevice, i, _surface, &presentSupport);
+        vkGetPhysicalDeviceSurfaceSupportKHR(_ctx.physicalDevice, i, _ctx.surface, &presentSupport);
         if (presentSupport) {
             presentFamily = i;
         }
@@ -355,17 +370,6 @@ bool Renderer::createCommandPool() {
 
 
 
-bool Renderer::createSurface() {
-    // A surface is a platform-specific representation of the window where Vulkan will render its output.
-    // its a window tied to a swapchain.
-    if (!SDL_Vulkan_CreateSurface(_window, _ctx.instance, nullptr, &_surface)) {
-        spdlog::error("Failed to create Vulkan surface: {}", SDL_GetError());
-        return false;
-    }
-    spdlog::info("Vulkan surface created successfully");
-    return true;
-}
-
 bool Renderer::isDeviceSuitable(VkPhysicalDevice device) {
     // Check if the device is suitable for our needs (graphics, compute, etc.)
     VkPhysicalDeviceProperties deviceProperties;
@@ -409,7 +413,7 @@ QueueFamilyIndices Renderer::findQueueFamilies(VkPhysicalDevice device) {
         }
 
         VkBool32 presentSupport = false;
-        vkGetPhysicalDeviceSurfaceSupportKHR(device, i, _surface, &presentSupport);
+        vkGetPhysicalDeviceSurfaceSupportKHR(device, i, _ctx.surface, &presentSupport);
 
         if (presentSupport) {
             indices.presentFamily = i;
@@ -428,22 +432,22 @@ QueueFamilyIndices Renderer::findQueueFamilies(VkPhysicalDevice device) {
 SwapChainSupportDetails Renderer::querySwapChainSupport(VkPhysicalDevice physicalDevice) {
     SwapChainSupportDetails details;
 
-    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevice, _surface, &details.capabilities);
+    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevice, _ctx.surface, &details.capabilities);
 
     uint32_t formatCount;
-    vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevice, _surface, &formatCount, nullptr);
+    vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevice, _ctx.surface, &formatCount, nullptr);
 
     if (formatCount != 0) {
         details.formats.resize(formatCount);
-        vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevice, _surface, &formatCount, details.formats.data());
+        vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevice, _ctx.surface, &formatCount, details.formats.data());
     }
 
     uint32_t presentModeCount;
-    vkGetPhysicalDeviceSurfacePresentModesKHR(physicalDevice, _surface, &presentModeCount, nullptr);
+    vkGetPhysicalDeviceSurfacePresentModesKHR(physicalDevice, _ctx.surface, &presentModeCount, nullptr);
 
     if (presentModeCount != 0) {
         details.presentModes.resize(presentModeCount);
-        vkGetPhysicalDeviceSurfacePresentModesKHR(physicalDevice, _surface, &presentModeCount, details.presentModes.data());
+        vkGetPhysicalDeviceSurfacePresentModesKHR(physicalDevice, _ctx.surface, &presentModeCount, details.presentModes.data());
     }
 
     return details;
@@ -497,7 +501,7 @@ bool Renderer::createSwapChain() {
 
     VkSwapchainCreateInfoKHR swapChainCreateInfo{};
     swapChainCreateInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-    swapChainCreateInfo.surface = _surface;
+    swapChainCreateInfo.surface = _ctx.surface;
 
     swapChainCreateInfo.minImageCount = imageCount;
     swapChainCreateInfo.imageFormat = surfaceFormat.format;
@@ -745,8 +749,8 @@ bool Renderer::createDescriptorSets() {
 
         VkDescriptorImageInfo imageInfo{};
         imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        imageInfo.imageView = _textureImageView;
-        imageInfo.sampler = _textureSampler;
+        imageInfo.imageView = _model->getTexture()->getImageView();
+        imageInfo.sampler = _textureSampler->getSampler();
 
         // Bind the buffer to the descriptor set
         std::array<VkWriteDescriptorSet, 2> descriptorWrites{};
@@ -767,7 +771,7 @@ bool Renderer::createDescriptorSets() {
         descriptorWrites[1].descriptorCount = 1;
         descriptorWrites[1].pImageInfo = &imageInfo;
 
-        vkUpdateDescriptorSets(_device, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
+        vkUpdateDescriptorSets(_ctx.device, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
     }
 }
 
@@ -961,7 +965,7 @@ bool Renderer::createFramebuffers() {
 
 bool Renderer::createVertexBuffer() {
     // Create vertex buffer
-    VkDeviceSize bufferSize = sizeof(_mesh.vertices[0]) * _mesh.vertices.size(); // Size of the vertex buffer
+    VkDeviceSize bufferSize = sizeof(_model->getMesh()->vertices[0]) * _model->getMesh()->vertices.size(); // Size of the vertex buffer
 
     // Create staging buffer which is visible by both GPU and CPU
     VkBuffer stagingBuffer;
@@ -976,7 +980,7 @@ bool Renderer::createVertexBuffer() {
     void* data;
     // Map the buffer memory into CPU addressable space
     vkMapMemory(_ctx.device, stagingBufferMemory, 0, bufferSize, 0, &data);
-    memcpy(data, _mesh.vertices.data(), (size_t)bufferSize); // Copy the vertex data to the mapped memory
+    memcpy(data, _model->getMesh()->vertices.data(), (size_t)bufferSize); // Copy the vertex data to the mapped memory
     vkUnmapMemory(_ctx.device, stagingBufferMemory); // Unmap the memory
 
     // Create the vertex buffer
@@ -997,7 +1001,7 @@ bool Renderer::createVertexBuffer() {
 
 bool Renderer::createIndexBuffer() {
     // Create index buffer
-    VkDeviceSize bufferSize = sizeof(_mesh.indices[0]) * _mesh.indices.size(); // Size of the index buffer
+    VkDeviceSize bufferSize = sizeof(_model->getMesh()->indices[0]) * _model->getMesh()->indices.size(); // Size of the index buffer
 
     // Create staging buffer which is visible by both GPU and CPU
     VkBuffer stagingBuffer;
@@ -1012,7 +1016,7 @@ bool Renderer::createIndexBuffer() {
     void* data;
     // Map the buffer memory into CPU addressable space
     vkMapMemory(_ctx.device, stagingBufferMemory, 0, bufferSize, 0, &data);
-    memcpy(data, _mesh.indices.data(), (size_t)bufferSize); // Copy the index data to the mapped memory
+    memcpy(data, _model->getMesh()->indices.data(), (size_t)bufferSize); // Copy the index data to the mapped memory
     vkUnmapMemory(_ctx.device, stagingBufferMemory); // Unmap the memory
 
     // Create the index buffer
@@ -1050,6 +1054,7 @@ bool Renderer::createUniformBuffers() {
         vkMapMemory(_ctx.device, _uniformBuffersMemory[i], 0, bufferSize, 0, &_uniformBuffersMapped[i]);
     }
 
+    return true;
 }
 
 void Renderer::updateUniformBuffer(uint32_t currentImage) {
@@ -1224,7 +1229,7 @@ void Renderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t image
     vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, _pipelineLayout, 0, 1, &_descriptorSets[_currentFrame], 0, nullptr);
 
     //vkCmdDraw(commandBuffer, static_cast<uint32_t>(vertices.size()), 1, 0, 0);
-    vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(_mesh.indices.size()), 1, 0, 0, 0);
+    vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(_model->getMesh()->indices.size()), 1, 0, 0, 0);
 
     vkCmdEndRenderPass(commandBuffer);
 

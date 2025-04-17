@@ -3,6 +3,7 @@
 
 struct VulkanContext {
     VkInstance instance;
+    VkSurfaceKHR surface = nullptr;
     VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
     VkDevice device;
     

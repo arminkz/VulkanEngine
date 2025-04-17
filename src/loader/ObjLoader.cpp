@@ -3,7 +3,7 @@
 #define TINYOBJLOADER_IMPLEMENTATION
 #include <tiny_obj_loader.h>
 
-Mesh ObjLoader::load(const std::string& modelPath, const std::string& texturePath) {
+Mesh ObjLoader::load(const std::string& modelPath) {
 
     Mesh mesh;
 
@@ -48,17 +48,6 @@ Mesh ObjLoader::load(const std::string& modelPath, const std::string& texturePat
             mesh.indices.push_back(uniqueVertices[vertex]);
         }
     }
-
-    // Load texture
-    // int texWidth, texHeight, texChannels;
-    // unsigned char* texData = stbi_load(texturePath.c_str(), &texWidth, &texHeight, &texChannels, 0);
-    // if (!texData) {
-    //     throw std::runtime_error("Failed to load texture: " + texturePath);
-    // }
-
-    // // Create Vulkan image and upload texture data (omitted for brevity)
-
-    // stbi_image_free(texData);
 
     return mesh;
 }

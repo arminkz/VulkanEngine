@@ -5,6 +5,8 @@
 #include "geometry/Vertex.h"
 #include "geometry/Mesh.h"
 #include "TurnTableCamera.h"
+#include "Model.h"
+#include "TextureSampler.h"
 
 const int MAX_FRAMES_IN_FLIGHT = 2;
 
@@ -13,12 +15,12 @@ class Renderer {
 private:
     SDL_Window* _window = nullptr;
 
-    Mesh _mesh;
     std::unique_ptr<TurnTableCamera> _camera = nullptr;
+    std::unique_ptr<Model> _model;
 
     VulkanContext _ctx;
 
-    VkSurfaceKHR _surface = nullptr;
+    std::unique_ptr<TextureSampler> _textureSampler;
 
     VkSwapchainKHR _swapChain = nullptr;
     VkFormat _swapChainImageFormat;

@@ -1,5 +1,6 @@
 #pragma once
 #include "stdafx.h"
+#include "VulkanContext.h"
 
 class Texture
 {
@@ -9,8 +10,9 @@ public:
 
     void cleanup();
 
+    uint32_t getMipLevels() const { return _mipLevels; }
+    VkImage getImage() const { return _textureImage; }
     VkImageView getImageView() const { return _textureImageView; }
-    VkSampler getSampler() const { return _textureSampler; }
 
 private:
     void generateMipmaps();
@@ -24,5 +26,4 @@ private:
     VkImage _textureImage;
     VkDeviceMemory _textureImageMemory;
     VkImageView _textureImageView;
-    VkSampler _textureSampler;
 };
