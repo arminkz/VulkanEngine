@@ -1,11 +1,9 @@
 #pragma once
 #include "../stdafx.h"
-#include "Mesh.h"
+#include "HostMesh.h"
 
 namespace MeshFactory {
 
-    Mesh createSphereMesh(float radius, int segments, int rings);
-
-    //Mesh createCubeMesh(float size);
+    HostMesh createSphereMesh(float radius, int segments, int rings);
 
 } 

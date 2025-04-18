@@ -1,10 +1,11 @@
-#include "Texture.h"
+#include "DeviceTexture.h"
 #include "VulkanHelper.h"
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
-Texture::Texture(const VulkanContext& ctx, const std::string& path) : _ctx(ctx)
+DeviceTexture::DeviceTexture(std::shared_ptr<VulkanContext> ctx, const std::string& path) 
+    : _ctx(std::move(ctx))
 {
     int texWidth, texHeight, texChannels;
     stbi_uc* pixels = stbi_load(path.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
@@ -30,9 +31,9 @@ Texture::Texture(const VulkanContext& ctx, const std::string& path) : _ctx(ctx)
 
     // Copy pixel data to buffer
     void* data;
-    vkMapMemory(_ctx.device, stagingBufferMemory, 0, imageSize, 0, &data); // Map the buffer memory into CPU addressable space
+    vkMapMemory(_ctx->device, stagingBufferMemory, 0, imageSize, 0, &data); // Map the buffer memory into CPU addressable space
     memcpy(data, pixels, (size_t)imageSize); // Copy the pixel data to the mapped memory
-    vkUnmapMemory(_ctx.device, stagingBufferMemory); // Unmap the memory
+    vkUnmapMemory(_ctx->device, stagingBufferMemory); // Unmap the memory
 
     // Free the loaded image data (from RAM)
     stbi_image_free(pixels); 
@@ -54,8 +55,8 @@ Texture::Texture(const VulkanContext& ctx, const std::string& path) : _ctx(ctx)
     VulkanHelper::copyBufferToImage(_ctx, stagingBuffer, _textureImage, static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight));
 
     // Staging buffer is no longer needed, so we can destroy it
-    vkDestroyBuffer(_ctx.device, stagingBuffer, nullptr); // Destroy the staging buffer
-    vkFreeMemory(_ctx.device, stagingBufferMemory, nullptr); // Free the staging buffer memory
+    vkDestroyBuffer(_ctx->device, stagingBuffer, nullptr); // Destroy the staging buffer
+    vkFreeMemory(_ctx->device, stagingBufferMemory, nullptr); // Free the staging buffer memory
 
     // Generate Mipmaps for the texture image
     generateMipmaps(); // Generate mipmaps for the texture image
@@ -64,25 +65,24 @@ Texture::Texture(const VulkanContext& ctx, const std::string& path) : _ctx(ctx)
     _textureImageView = VulkanHelper::createImageView(_ctx, _textureImage, VK_FORMAT_R8G8B8A8_SRGB, _mipLevels, VK_IMAGE_ASPECT_COLOR_BIT);
 }
 
-Texture::~Texture()
+DeviceTexture::~DeviceTexture()
 {
     spdlog::info("Texture is getting destroyed...");
     cleanup();
 }
 
-void Texture::cleanup() {
-    vkDestroyImageView(_ctx.device, _textureImageView, nullptr);
-    vkDestroyImage(_ctx.device, _textureImage, nullptr);
-    vkFreeMemory(_ctx.device, _textureImageMemory, nullptr);
+void DeviceTexture::cleanup() {
+    vkDestroyImageView(_ctx->device, _textureImageView, nullptr);
+    vkDestroyImage(_ctx->device, _textureImage, nullptr);
+    vkFreeMemory(_ctx->device, _textureImageMemory, nullptr);
 }
 
-void Texture::generateMipmaps() {
-
+void DeviceTexture::generateMipmaps() {
     // Generate mipmaps for the texture image on the GPU
     // In serious applications, mipmaps are precomputed and stored in the texture image
     
     VkFormatProperties formatProperties;
-    vkGetPhysicalDeviceFormatProperties(_ctx.physicalDevice, _format, &formatProperties);
+    vkGetPhysicalDeviceFormatProperties(_ctx->physicalDevice, _format, &formatProperties);
     if (!(formatProperties.optimalTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT)) {
         spdlog::error("Texture image format does not support linear blitting!");
         return;

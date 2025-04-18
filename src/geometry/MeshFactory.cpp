@@ -1,12 +1,12 @@
 #include "MeshFactory.h"
 #include "Vertex.h"
-#include "Mesh.h"
+#include "HostMesh.h"
 
 namespace MeshFactory {
 
-    Mesh createSphereMesh(float radius, int segments, int rings)
+    HostMesh createSphereMesh(float radius, int segments, int rings)
     {
-        Mesh mesh;
+        HostMesh mesh;
 
         // Generate vertices and texture coordinates
         for (int y = 0; y <= rings; ++y) {

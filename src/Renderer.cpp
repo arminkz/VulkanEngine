@@ -22,12 +22,6 @@ Renderer::~Renderer()
         vkDestroyFence(_ctx.device, _inFlightFences[i], nullptr);
     }
 
-    vkDestroyBuffer(_ctx.device, _vertexBuffer, nullptr);
-    vkFreeMemory(_ctx.device, _vertexBufferMemory, nullptr);
-
-    vkDestroyBuffer(_ctx.device, _indexBuffer, nullptr);
-    vkFreeMemory(_ctx.device, _indexBufferMemory, nullptr);
-
 
     for (auto framebuffer : _swapChainFramebuffers) {
         vkDestroyFramebuffer(_ctx.device, framebuffer, nullptr);
@@ -83,7 +77,7 @@ bool Renderer::initialize(SDL_Window* _window)
     // Model to render
     // Load meesh data
 
-    Mesh mesh = MeshFactory::createSphereMesh(1.0f, 64, 64);
+    std::shared_ptr<Mesh> mesh = std::make_shared<Mesh>(MeshFactory::createSphereMesh(1.0f, 64, 64));
     _model = std::make_unique<Model>(_ctx, mesh, "textures/8k_earth_daymap.jpg");
     
     //Mesh mesh = ObjLoader::load("models/viking_room.obj");
@@ -114,12 +108,6 @@ bool Renderer::initialize(SDL_Window* _window)
 
     // Create framebuffers
     if (!createFramebuffers()) return false;
-
-    // Create vertex buffer
-    if (!createVertexBuffer()) return false;
-
-    // Create index buffer
-    if (!createIndexBuffer()) return false;
 
     // Create uniform buffers
     if (!createUniformBuffers()) return false;
@@ -960,78 +948,6 @@ bool Renderer::createFramebuffers() {
         }
     }
 
-    return true;
-}
-
-bool Renderer::createVertexBuffer() {
-    // Create vertex buffer
-    VkDeviceSize bufferSize = sizeof(_model->getMesh()->vertices[0]) * _model->getMesh()->vertices.size(); // Size of the vertex buffer
-
-    // Create staging buffer which is visible by both GPU and CPU
-    VkBuffer stagingBuffer;
-    VkDeviceMemory stagingBufferMemory;
-    VulkanHelper::createBuffer(_ctx,
-        bufferSize, 
-        VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, 
-        stagingBuffer, stagingBufferMemory);
-
-    // Copy vertex data to buffer
-    void* data;
-    // Map the buffer memory into CPU addressable space
-    vkMapMemory(_ctx.device, stagingBufferMemory, 0, bufferSize, 0, &data);
-    memcpy(data, _model->getMesh()->vertices.data(), (size_t)bufferSize); // Copy the vertex data to the mapped memory
-    vkUnmapMemory(_ctx.device, stagingBufferMemory); // Unmap the memory
-
-    // Create the vertex buffer
-    VulkanHelper::createBuffer(_ctx,
-        bufferSize,
-        VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, 
-        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-        _vertexBuffer, _vertexBufferMemory);
-
-    // Copy the data from the staging buffer to the vertex buffer
-    VulkanHelper::copyBuffer(_ctx, stagingBuffer, _vertexBuffer, bufferSize);
-
-    // Cleanup staging buffer
-    vkDestroyBuffer(_ctx.device, stagingBuffer, nullptr); // Destroy the staging buffer
-    vkFreeMemory(_ctx.device, stagingBufferMemory, nullptr); // Free the staging buffer memory
-    return true;
-}
-
-bool Renderer::createIndexBuffer() {
-    // Create index buffer
-    VkDeviceSize bufferSize = sizeof(_model->getMesh()->indices[0]) * _model->getMesh()->indices.size(); // Size of the index buffer
-
-    // Create staging buffer which is visible by both GPU and CPU
-    VkBuffer stagingBuffer;
-    VkDeviceMemory stagingBufferMemory;
-    VulkanHelper::createBuffer(_ctx,
-        bufferSize, 
-        VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, 
-        stagingBuffer, stagingBufferMemory);
-
-    // Copy index data to buffer
-    void* data;
-    // Map the buffer memory into CPU addressable space
-    vkMapMemory(_ctx.device, stagingBufferMemory, 0, bufferSize, 0, &data);
-    memcpy(data, _model->getMesh()->indices.data(), (size_t)bufferSize); // Copy the index data to the mapped memory
-    vkUnmapMemory(_ctx.device, stagingBufferMemory); // Unmap the memory
-
-    // Create the index buffer
-    VulkanHelper::createBuffer(_ctx,
-        bufferSize,
-        VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, 
-        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-        _indexBuffer, _indexBufferMemory);
-
-    // Copy the data from the staging buffer to the index buffer
-    VulkanHelper::copyBuffer(_ctx, stagingBuffer, _indexBuffer, bufferSize);
-
-    // Cleanup staging buffer
-    vkDestroyBuffer(_ctx.device, stagingBuffer, nullptr); // Destroy the staging buffer
-    vkFreeMemory(_ctx.device, stagingBufferMemory, nullptr); // Free the staging buffer memory
     return true;
 }
 

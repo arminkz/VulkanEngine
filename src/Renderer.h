@@ -38,10 +38,6 @@ private:
     VkPipelineLayout _pipelineLayout;
     VkPipeline _graphicsPipeline;
 
-    VkBuffer _vertexBuffer;
-    VkDeviceMemory _vertexBufferMemory;
-    VkBuffer _indexBuffer;
-    VkDeviceMemory _indexBufferMemory;
     std::vector<VkBuffer> _uniformBuffers;
     std::vector<VkDeviceMemory> _uniformBuffersMemory;
     std::vector<void*> _uniformBuffersMapped;
@@ -118,19 +114,14 @@ private:
     VkSampleCountFlagBits getMaxMsaaSampleCount();
     bool hasStencilComponent(VkFormat format);
 
-    bool createVertexBuffer();
-    bool createIndexBuffer();
     bool createUniformBuffers();
     void updateUniformBuffer(uint32_t currentImage);
 
     void createColorResources();
     void createDepthResources();
     
-    
     bool createCommandBuffers();
     void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
-    VkCommandBuffer beginSingleTimeCommands();
-    void endSingleTimeCommands(VkCommandBuffer commandBuffer);
 
     bool createSyncObjects();
 

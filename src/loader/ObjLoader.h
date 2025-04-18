@@ -1,10 +1,9 @@
 #pragma once
 #include "../stdafx.h"
-#include "../geometry/Mesh.h"
+#include "../geometry/HostMesh.h"
 
-class ObjLoader {
-public:
-    static Mesh load(const std::string& modelPath);
-};
+namespace ObjLoader {
 
-//TODO: change class to namespace!
+    HostMesh load(const std::string& modelPath);
+
+}

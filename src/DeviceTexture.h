@@ -2,11 +2,12 @@
 #include "stdafx.h"
 #include "VulkanContext.h"
 
-class Texture
+// Texture on GPU
+class DeviceTexture
 {
 public:
-    Texture(const VulkanContext& ctx, const std::string& path);
-    ~Texture();
+    DeviceTexture(std::shared_ptr<VulkanContext> ctx, const std::string& path);
+    ~DeviceTexture();
 
     void cleanup();
 
@@ -15,15 +16,16 @@ public:
     VkImageView getImageView() const { return _textureImageView; }
 
 private:
-    void generateMipmaps();
+    std::shared_ptr<VulkanContext> _ctx;
 
     uint32_t _width;
     uint32_t _height;
     VkFormat _format;
     uint32_t _mipLevels;
     
-    const VulkanContext& _ctx;
     VkImage _textureImage;
     VkDeviceMemory _textureImageMemory;
     VkImageView _textureImageView;
+    
+    void generateMipmaps();
 };
