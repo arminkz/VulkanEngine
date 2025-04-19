@@ -29,6 +29,8 @@ namespace MeshFactory {
                 Vertex vert;
                 vert.pos = { px, py, pz };
                 vert.texCoord = { u, v };
+                vert.normal = glm::normalize(vert.pos);
+                vert.tangent = glm::normalize(glm::vec3(-sinPhi * sinTheta, cosPhi * sinTheta, 0.0f));
 
                 // Add vertex
                 mesh.vertices.push_back(vert);

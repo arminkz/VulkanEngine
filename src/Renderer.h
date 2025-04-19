@@ -3,9 +3,9 @@
 #include "VulkanHelper.h"
 #include "GeometryHelper.h"
 #include "geometry/Vertex.h"
-#include "geometry/Mesh.h"
+#include "geometry/HostMesh.h"
 #include "TurnTableCamera.h"
-#include "Model.h"
+#include "DeviceModel.h"
 #include "TextureSampler.h"
 
 const int MAX_FRAMES_IN_FLIGHT = 2;
@@ -15,11 +15,12 @@ class Renderer {
 private:
     SDL_Window* _window = nullptr;
 
+    std::shared_ptr<VulkanContext> _ctx;
+
     std::unique_ptr<TurnTableCamera> _camera = nullptr;
-    std::unique_ptr<Model> _model;
 
-    VulkanContext _ctx;
-
+    std::unique_ptr<DeviceModel> _model;
+    std::unique_ptr<DeviceModel> _model2;
     std::unique_ptr<TextureSampler> _textureSampler;
 
     VkSwapchainKHR _swapChain = nullptr;
@@ -76,20 +77,16 @@ private:
     void createVulkanContext();
     //-------------------------
     bool createVulkanInstance();
+    bool createSurface();
     bool pickPhysicalDevice();
     bool createLogicalDevice();
     bool createCommandPool();
     //-------------------------
 
 
-    bool createSurface();
-
     bool isDeviceSuitable(VkPhysicalDevice device);
     
-
     QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device);
-    
-
     SwapChainSupportDetails querySwapChainSupport(VkPhysicalDevice device);
     VkSurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats);
     VkPresentModeKHR chooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes);

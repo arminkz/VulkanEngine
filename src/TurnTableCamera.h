@@ -7,7 +7,7 @@ public:
 
     struct CameraParams
     {
-        float radius = 4.0f;   // Distance from the center of rotation
+        float radius = 8.0f;   // Distance from the center of rotation
         float theta = 0.0f;    // Angle around the Y-axis
         float phi = -glm::half_pi<float>();      // Angle from the Y-axis
         

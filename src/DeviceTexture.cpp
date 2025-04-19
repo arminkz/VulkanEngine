@@ -16,7 +16,7 @@ DeviceTexture::DeviceTexture(std::shared_ptr<VulkanContext> ctx, const std::stri
 
     _width = texWidth;
     _height = texHeight;
-    _mipLevels = static_cast<uint32_t>(floor(log2(std::max(texWidth, texHeight)))) + 1;
+    _mipLevels = glm::min(static_cast<int>(floor(log2(std::max(texWidth, texHeight)))) + 1, 12); //TODO: fix this hardcode!
     _format = VK_FORMAT_R8G8B8A8_SRGB;
 
     VkDeviceSize imageSize = texWidth * texHeight * 4;
@@ -59,6 +59,7 @@ DeviceTexture::DeviceTexture(std::shared_ptr<VulkanContext> ctx, const std::stri
     vkFreeMemory(_ctx->device, stagingBufferMemory, nullptr); // Free the staging buffer memory
 
     // Generate Mipmaps for the texture image
+    spdlog::info("Generating Mipmaps for {} levels: {}", path, _mipLevels);
     generateMipmaps(); // Generate mipmaps for the texture image
 
     // Create ImageView

@@ -4,6 +4,7 @@
 DeviceMesh::DeviceMesh(std::shared_ptr<VulkanContext> ctx, const HostMesh& mesh)
     : _ctx(std::move(ctx))
 {
+    _indexCount = static_cast<uint32_t>(mesh.indices.size());
     createVertexBuffer(mesh);
     createIndexBuffer(mesh);
 }

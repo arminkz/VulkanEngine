@@ -5,13 +5,13 @@
 class TextureSampler
 {
 public:
-    TextureSampler(const VulkanContext& ctx, uint32_t mipLevels);
+    TextureSampler(std::shared_ptr<VulkanContext> ctx, uint32_t mipLevels);
     ~TextureSampler();
 
     VkSampler getSampler() const { return _textureSampler; }
 
 private:
-    const VulkanContext& _ctx;
+    std::shared_ptr<VulkanContext> _ctx;
 
     VkSampler _textureSampler;
 };
