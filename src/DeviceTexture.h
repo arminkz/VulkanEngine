@@ -15,6 +15,8 @@ public:
     VkImage getImage() const { return _textureImage; }
     VkImageView getImageView() const { return _textureImageView; }
 
+    VkDescriptorImageInfo getDescriptorInfo(VkSampler sampler) const;
+
 private:
     std::shared_ptr<VulkanContext> _ctx;
 

@@ -3,6 +3,7 @@
 #include "geometry/DeviceMesh.h"
 #include "DeviceTexture.h"
 #include "VulkanContext.h"
+#include "UniformBuffer.h"
 
 // Model on GPU
 class DeviceModel
@@ -29,6 +30,20 @@ public:
     const DeviceTexture* getSpecularTexture() const { return _specularTexture.get(); }
     const DeviceTexture* getOverlayColorTexture() const { return _overlayColorTexture.get(); }
 
+    struct Material {
+        alignas(4)  int hasBaseColorTexture;
+        alignas(4)  int hasUnlitColorTexture;
+        alignas(4)  int hasNormalMapTexture;
+        alignas(4)  int hasSpecularTexture;
+        alignas(4)  int hasOverlayColorTexture;
+
+        alignas(4)  float ambientStrength;
+        alignas(4)  float specularStrength;
+        alignas(4)  float overlayOffset;
+    };
+
+    const UniformBuffer<Material>* getMaterialUBO() const { return _materialUBO.get(); }
+
 private:
     std::shared_ptr<VulkanContext> _ctx;
     
@@ -42,4 +57,8 @@ private:
 
     glm::vec3 _color;
     glm::mat4 _modelMatrix;
+
+    Material _material;
+    std::unique_ptr<UniformBuffer<Material>> _materialUBO;
+    
 };

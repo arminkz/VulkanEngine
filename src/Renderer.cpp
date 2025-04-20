@@ -84,7 +84,7 @@ bool Renderer::initialize(SDL_Window* _window)
     HostMesh hmesh = MeshFactory::createSphereMesh(1.0f, 64, 64);
     std::shared_ptr<DeviceMesh> dmesh = std::make_shared<DeviceMesh>(_ctx, hmesh);
     std::shared_ptr<DeviceTexture> colorTexture = std::make_shared<DeviceTexture>(_ctx, "textures/8k_earth_daymap.jpg");
-    std::shared_ptr<DeviceTexture> unlitTexture = std::make_shared<DeviceTexture>(_ctx, "textures/8k_earth_nightmap.jpg");
+    std::shared_ptr<DeviceTexture> unlitTexture = nullptr; //std::make_shared<DeviceTexture>(_ctx, "textures/8k_earth_nightmap.jpg");
     std::shared_ptr<DeviceTexture> normalTexture = std::make_shared<DeviceTexture>(_ctx, "textures/EarthNormal.png");
     std::shared_ptr<DeviceTexture> specularTexture = std::make_shared<DeviceTexture>(_ctx, "textures/EarthSpec.png");
     std::shared_ptr<DeviceTexture> overlayTexture = std::make_shared<DeviceTexture>(_ctx, "textures/8k_earth_clouds.jpg");
@@ -674,7 +674,7 @@ bool Renderer::createRenderPass() {
 
 bool Renderer::createDescriptorSetLayout() {
 
-    std::array<VkDescriptorSetLayoutBinding, 6> bindings;
+    std::array<VkDescriptorSetLayoutBinding, 7> bindings;
 
     // Create descriptor set layout for UBO (Uniform Buffer Object)
     // This layout will be used to bind the uniform buffer to the vertex shader (MVP)
@@ -686,10 +686,19 @@ bool Renderer::createDescriptorSetLayout() {
     uboLayoutBinding.pImmutableSamplers = nullptr; // Optional
     bindings[0] = uboLayoutBinding;
 
+    // This layout will be used to bind the uniform buffer to the fragment shader (Material)
+    VkDescriptorSetLayoutBinding materialUBOLayoutBinding{};
+    materialUBOLayoutBinding.binding = 1; // This should match the number in shader.
+    materialUBOLayoutBinding.descriptorCount = 1;
+    materialUBOLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    materialUBOLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+    materialUBOLayoutBinding.pImmutableSamplers = nullptr; // Optional
+    bindings[1] = materialUBOLayoutBinding;
+
     // Create descriptor set layout for textures
     // This layout will be used to bind the texture sampler to the fragment shader (texture)
     // We have 5 textures.
-    for (int i=1; i<6; i++) {
+    for (int i=2; i<7; i++) {
         VkDescriptorSetLayoutBinding textureLayoutBinding{};
         textureLayoutBinding.binding = i;
         textureLayoutBinding.descriptorCount = 1;
@@ -715,11 +724,14 @@ bool Renderer::createDescriptorSetLayout() {
 }
 
 bool Renderer::createDescriptorPool() {
-    std::array<VkDescriptorPoolSize, 6> poolSizes{};
+    std::array<VkDescriptorPoolSize, 7> poolSizes{};
     poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
     poolSizes[0].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
 
-    for(int i=1; i<6; i++){
+    poolSizes[1].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    poolSizes[1].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+
+    for(int i=2; i<7; i++){
         poolSizes[i].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
         poolSizes[i].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
     }
@@ -762,34 +774,15 @@ bool Renderer::createDescriptorSets() {
         bufferInfo.offset = 0;
         bufferInfo.range = sizeof(MVP);
 
-        VkDescriptorImageInfo baseColorTextureInfo{};
-        baseColorTextureInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        baseColorTextureInfo.imageView = _model->getBaseColorTexture()->getImageView();
-        baseColorTextureInfo.sampler = _textureSampler->getSampler();
-
-        VkDescriptorImageInfo unlitColorTextureInfo{};
-        unlitColorTextureInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        unlitColorTextureInfo.imageView = _model->getUnlitColorTexture()->getImageView();
-        unlitColorTextureInfo.sampler = _textureSampler->getSampler();
-
-        VkDescriptorImageInfo normalMapTextureInfo{};
-        normalMapTextureInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        normalMapTextureInfo.imageView = _model->getNormalMapTexture()->getImageView();
-        normalMapTextureInfo.sampler = _textureSampler->getSampler();
-
-        VkDescriptorImageInfo specularTextureInfo{};
-        specularTextureInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        specularTextureInfo.imageView = _model->getSpecularTexture()->getImageView();
-        specularTextureInfo.sampler = _textureSampler->getSampler();
-
-        VkDescriptorImageInfo overlayColorTextureInfo{};
-        overlayColorTextureInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        overlayColorTextureInfo.imageView = _model->getOverlayColorTexture()->getImageView();
-        overlayColorTextureInfo.sampler = _textureSampler->getSampler();
-
+        auto materialBufferInfo = _model->getMaterialUBO()->getDescriptorInfo();
+        auto baseColorTextureInfo = _model->getBaseColorTexture()->getDescriptorInfo(_textureSampler->getSampler());
+        auto unlitColorTextureInfo = _model->getUnlitColorTexture()->getDescriptorInfo(_textureSampler->getSampler());
+        auto normalMapTextureInfo = _model->getNormalMapTexture()->getDescriptorInfo(_textureSampler->getSampler());
+        auto specularTextureInfo = _model->getSpecularTexture()->getDescriptorInfo(_textureSampler->getSampler());
+        auto overlayColorTextureInfo = _model->getOverlayColorTexture()->getDescriptorInfo(_textureSampler->getSampler());
 
         // Bind the buffer to the descriptor set
-        std::array<VkWriteDescriptorSet, 6> descriptorWrites{};
+        std::array<VkWriteDescriptorSet, 7> descriptorWrites{};
         descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         descriptorWrites[0].dstSet = _descriptorSets[i];
         descriptorWrites[0].dstBinding = 0;
@@ -798,22 +791,22 @@ bool Renderer::createDescriptorSets() {
         descriptorWrites[0].descriptorCount = 1;
         descriptorWrites[0].pBufferInfo = &bufferInfo;
 
-        // Bind the image to the descriptor set
         descriptorWrites[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         descriptorWrites[1].dstSet = _descriptorSets[i];
         descriptorWrites[1].dstBinding = 1;
         descriptorWrites[1].dstArrayElement = 0;
-        descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
         descriptorWrites[1].descriptorCount = 1;
-        descriptorWrites[1].pImageInfo = &baseColorTextureInfo;
+        descriptorWrites[1].pBufferInfo = &materialBufferInfo;
 
+        // Bind the image to the descriptor set
         descriptorWrites[2].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         descriptorWrites[2].dstSet = _descriptorSets[i];
         descriptorWrites[2].dstBinding = 2;
         descriptorWrites[2].dstArrayElement = 0;
         descriptorWrites[2].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
         descriptorWrites[2].descriptorCount = 1;
-        descriptorWrites[2].pImageInfo = &unlitColorTextureInfo;
+        descriptorWrites[2].pImageInfo = &baseColorTextureInfo;
 
         descriptorWrites[3].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         descriptorWrites[3].dstSet = _descriptorSets[i];
@@ -821,7 +814,7 @@ bool Renderer::createDescriptorSets() {
         descriptorWrites[3].dstArrayElement = 0;
         descriptorWrites[3].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
         descriptorWrites[3].descriptorCount = 1;
-        descriptorWrites[3].pImageInfo = &normalMapTextureInfo;
+        descriptorWrites[3].pImageInfo = &unlitColorTextureInfo;
 
         descriptorWrites[4].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         descriptorWrites[4].dstSet = _descriptorSets[i];
@@ -829,7 +822,7 @@ bool Renderer::createDescriptorSets() {
         descriptorWrites[4].dstArrayElement = 0;
         descriptorWrites[4].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
         descriptorWrites[4].descriptorCount = 1;
-        descriptorWrites[4].pImageInfo = &specularTextureInfo;
+        descriptorWrites[4].pImageInfo = &normalMapTextureInfo;
 
         descriptorWrites[5].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         descriptorWrites[5].dstSet = _descriptorSets[i];
@@ -837,7 +830,15 @@ bool Renderer::createDescriptorSets() {
         descriptorWrites[5].dstArrayElement = 0;
         descriptorWrites[5].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
         descriptorWrites[5].descriptorCount = 1;
-        descriptorWrites[5].pImageInfo = &overlayColorTextureInfo;
+        descriptorWrites[5].pImageInfo = &specularTextureInfo;
+
+        descriptorWrites[6].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        descriptorWrites[6].dstSet = _descriptorSets[i];
+        descriptorWrites[6].dstBinding = 6;
+        descriptorWrites[6].dstArrayElement = 0;
+        descriptorWrites[6].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        descriptorWrites[6].descriptorCount = 1;
+        descriptorWrites[6].pImageInfo = &overlayColorTextureInfo;
 
         vkUpdateDescriptorSets(_ctx->device, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
     }

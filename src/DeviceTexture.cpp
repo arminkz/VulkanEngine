@@ -183,3 +183,12 @@ void DeviceTexture::generateMipmaps() {
 }
 
 
+VkDescriptorImageInfo DeviceTexture::getDescriptorInfo(VkSampler sampler) const
+{
+    VkDescriptorImageInfo textureInfo{};
+    textureInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    textureInfo.imageView = _textureImageView;
+    textureInfo.sampler = sampler;
+    return textureInfo;
+}
+
