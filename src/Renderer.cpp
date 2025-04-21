@@ -22,6 +22,7 @@ Renderer::~Renderer()
     _model = nullptr;
     _model2 = nullptr;
     _textureSampler = nullptr;
+    _dummyTexture = nullptr;
 
     cleanupSwapChain();
 
@@ -80,26 +81,30 @@ bool Renderer::initialize(SDL_Window* _window)
     // Create Camera
     _camera = std::make_unique<TurnTableCamera>();
 
+    // Create Dummy Texture
+    uint8_t pixel[4] = { 255, 255, 255, 255 };
+    _dummyTexture = std::make_unique<DeviceTexture>(_ctx, pixel, 1, 1, VK_FORMAT_R8G8B8A8_UNORM);
+
     // Model creation
     HostMesh hmesh = MeshFactory::createSphereMesh(1.0f, 64, 64);
     std::shared_ptr<DeviceMesh> dmesh = std::make_shared<DeviceMesh>(_ctx, hmesh);
-    std::shared_ptr<DeviceTexture> colorTexture = std::make_shared<DeviceTexture>(_ctx, "textures/8k_earth_daymap.jpg");
-    std::shared_ptr<DeviceTexture> unlitTexture = nullptr; //std::make_shared<DeviceTexture>(_ctx, "textures/8k_earth_nightmap.jpg");
-    std::shared_ptr<DeviceTexture> normalTexture = std::make_shared<DeviceTexture>(_ctx, "textures/EarthNormal.png");
-    std::shared_ptr<DeviceTexture> specularTexture = std::make_shared<DeviceTexture>(_ctx, "textures/EarthSpec.png");
-    std::shared_ptr<DeviceTexture> overlayTexture = std::make_shared<DeviceTexture>(_ctx, "textures/8k_earth_clouds.jpg");
+    std::shared_ptr<DeviceTexture> colorTexture = std::make_shared<DeviceTexture>(_ctx, "textures/8k_earth_daymap.jpg", VK_FORMAT_R8G8B8A8_SRGB);
+    std::shared_ptr<DeviceTexture> unlitTexture = std::make_shared<DeviceTexture>(_ctx, "textures/8k_earth_nightmap.jpg", VK_FORMAT_R8G8B8A8_SRGB);
+    std::shared_ptr<DeviceTexture> normalTexture = std::make_shared<DeviceTexture>(_ctx, "textures/EarthNormal.png", VK_FORMAT_R8G8B8A8_UNORM);
+    std::shared_ptr<DeviceTexture> specularTexture = std::make_shared<DeviceTexture>(_ctx, "textures/EarthSpec.png", VK_FORMAT_R8G8B8A8_UNORM);
+    std::shared_ptr<DeviceTexture> overlayTexture = std::make_shared<DeviceTexture>(_ctx, "textures/8k_earth_clouds.jpg", VK_FORMAT_R8G8B8A8_SRGB);
     _model = std::make_unique<DeviceModel>(_ctx, dmesh, colorTexture, unlitTexture, normalTexture, specularTexture, overlayTexture);
 
     HostMesh hmesh2 = MeshFactory::createSphereMesh(0.5f, 64, 64);
     std::shared_ptr<DeviceMesh> dmesh2 = std::make_shared<DeviceMesh>(_ctx, hmesh2);
-    std::shared_ptr<DeviceTexture> texture2 = std::make_shared<DeviceTexture>(_ctx, "textures/2k_moon.jpg");
+    std::shared_ptr<DeviceTexture> texture2 = std::make_shared<DeviceTexture>(_ctx, "textures/2k_moon.jpg", VK_FORMAT_R8G8B8A8_SRGB);
     _model2 = std::make_unique<DeviceModel>(_ctx, dmesh2, texture2);
     
     //Mesh mesh = ObjLoader::load("models/viking_room.obj");
     //_model = std::make_unique<Model>(_ctx, mesh, "textures/viking_room.png");
 
     // Texture Sampler
-    _textureSampler = std::make_unique<TextureSampler>(_ctx, colorTexture->getMipLevels());
+    _textureSampler = std::make_unique<TextureSampler>(_ctx, colorTexture ? colorTexture->getMipLevels() : 1);
 
     _msaaSamples = getMaxMsaaSampleCount();
     spdlog::info("Max MSAA samples: {}", static_cast<int>(_msaaSamples));
@@ -774,12 +779,14 @@ bool Renderer::createDescriptorSets() {
         bufferInfo.offset = 0;
         bufferInfo.range = sizeof(MVP);
 
+        VkDescriptorImageInfo dummyTextureInfo = _dummyTexture->getDescriptorInfo(_textureSampler->getSampler());
+
         auto materialBufferInfo = _model->getMaterialUBO()->getDescriptorInfo();
-        auto baseColorTextureInfo = _model->getBaseColorTexture()->getDescriptorInfo(_textureSampler->getSampler());
-        auto unlitColorTextureInfo = _model->getUnlitColorTexture()->getDescriptorInfo(_textureSampler->getSampler());
-        auto normalMapTextureInfo = _model->getNormalMapTexture()->getDescriptorInfo(_textureSampler->getSampler());
-        auto specularTextureInfo = _model->getSpecularTexture()->getDescriptorInfo(_textureSampler->getSampler());
-        auto overlayColorTextureInfo = _model->getOverlayColorTexture()->getDescriptorInfo(_textureSampler->getSampler());
+        auto baseColorTextureInfo = _model->getBaseColorTexture() ? _model->getBaseColorTexture()->getDescriptorInfo(_textureSampler->getSampler()) : dummyTextureInfo;
+        auto unlitColorTextureInfo = _model->getUnlitColorTexture() ? _model->getUnlitColorTexture()->getDescriptorInfo(_textureSampler->getSampler()) : dummyTextureInfo;
+        auto normalMapTextureInfo = _model->getNormalMapTexture() ? _model->getNormalMapTexture()->getDescriptorInfo(_textureSampler->getSampler()) : dummyTextureInfo;
+        auto specularTextureInfo = _model->getSpecularTexture() ? _model->getSpecularTexture()->getDescriptorInfo(_textureSampler->getSampler()) : dummyTextureInfo;
+        auto overlayColorTextureInfo = _model->getSpecularTexture() ? _model->getOverlayColorTexture()->getDescriptorInfo(_textureSampler->getSampler()) : dummyTextureInfo;
 
         // Bind the buffer to the descriptor set
         std::array<VkWriteDescriptorSet, 7> descriptorWrites{};
@@ -1061,14 +1068,15 @@ void Renderer::updateUniformBuffer(uint32_t currentImage) {
     float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
 
     MVP mvp{};
-    mvp.model = glm::rotate(glm::mat4(1.0f), 0.1f * time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-    mvp.model = glm::translate(mvp.model, glm::vec3(-2.f,-2.f,0.f));
-    mvp.model = glm::rotate(mvp.model, 0.3f * time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+    //mvp.model = glm::rotate(glm::mat4(1.0f), 0.1f * time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+    //mvp.model = glm::translate(glm::mat4(1.0f), glm::vec3(-2.f,-2.f,0.f));
+    mvp.model = glm::rotate(glm::mat4(1.0f), 0.05f * time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+
     //mvp.model = glm::mat4(1.0f);
     mvp.view = _camera->getViewMatrix(); 
     mvp.projection = glm::perspective(glm::radians(45.0f), (float)_swapChainExtent.width / (float)_swapChainExtent.height, 0.1f, 100.0f);
     mvp.projection[1][1] *= -1; // Invert Y axis for Vulkan
-    
+
     memcpy(_uniformBuffersMapped[currentImage], &mvp, sizeof(mvp)); // Copy the MVP data to the mapped memory (Upload to GPU)
 }
 

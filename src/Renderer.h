@@ -23,6 +23,8 @@ private:
     std::unique_ptr<DeviceModel> _model2;
     std::unique_ptr<TextureSampler> _textureSampler;
 
+    std::unique_ptr<DeviceTexture> _dummyTexture;
+
     VkSwapchainKHR _swapChain = nullptr;
     VkFormat _swapChainImageFormat;
     VkExtent2D _swapChainExtent;

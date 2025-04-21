@@ -28,6 +28,7 @@ namespace MeshFactory {
 
                 Vertex vert;
                 vert.pos = { px, py, pz };
+                vert.color = glm::vec3(1.f);
                 vert.texCoord = { u, v };
                 vert.normal = glm::normalize(vert.pos);
                 vert.tangent = glm::normalize(glm::vec3(-sinPhi * sinTheta, cosPhi * sinTheta, 0.0f));

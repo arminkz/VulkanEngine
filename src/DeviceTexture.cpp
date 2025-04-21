@@ -4,7 +4,7 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
-DeviceTexture::DeviceTexture(std::shared_ptr<VulkanContext> ctx, const std::string& path) 
+DeviceTexture::DeviceTexture(std::shared_ptr<VulkanContext> ctx, const std::string& path, VkFormat format) 
     : _ctx(std::move(ctx))
 {
     int texWidth, texHeight, texChannels;
@@ -17,7 +17,7 @@ DeviceTexture::DeviceTexture(std::shared_ptr<VulkanContext> ctx, const std::stri
     _width = texWidth;
     _height = texHeight;
     _mipLevels = glm::min(static_cast<int>(floor(log2(std::max(texWidth, texHeight)))) + 1, 12); //TODO: fix this hardcode!
-    _format = VK_FORMAT_R8G8B8A8_SRGB;
+    _format = format;
 
     VkDeviceSize imageSize = texWidth * texHeight * 4;
 
@@ -35,12 +35,12 @@ DeviceTexture::DeviceTexture(std::shared_ptr<VulkanContext> ctx, const std::stri
     memcpy(data, pixels, (size_t)imageSize); // Copy the pixel data to the mapped memory
     vkUnmapMemory(_ctx->device, stagingBufferMemory); // Unmap the memory
 
-    // Free the loaded image data (from RAM)
+    // Free the loaded image data (from CPU RAM)
     stbi_image_free(pixels); 
 
     // Create Image
     VulkanHelper::createImage(_ctx, texWidth, texHeight,
-        VK_FORMAT_R8G8B8A8_SRGB,
+        _format,
         _mipLevels,
         VK_SAMPLE_COUNT_1_BIT,
         VK_IMAGE_TILING_OPTIMAL,
@@ -49,7 +49,7 @@ DeviceTexture::DeviceTexture(std::shared_ptr<VulkanContext> ctx, const std::stri
         _textureImage, _textureImageMemory);
 
     // Transition image layout to transfer destination optimal
-    VulkanHelper::transitionImageLayout(_ctx, _textureImage, VK_FORMAT_R8G8B8A8_SRGB, _mipLevels, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+    VulkanHelper::transitionImageLayout(_ctx, _textureImage, _format, _mipLevels, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
     // Copy from staging buffer to the image
     VulkanHelper::copyBufferToImage(_ctx, stagingBuffer, _textureImage, static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight));
@@ -63,7 +63,53 @@ DeviceTexture::DeviceTexture(std::shared_ptr<VulkanContext> ctx, const std::stri
     generateMipmaps(); // Generate mipmaps for the texture image
 
     // Create ImageView
-    _textureImageView = VulkanHelper::createImageView(_ctx, _textureImage, VK_FORMAT_R8G8B8A8_SRGB, _mipLevels, VK_IMAGE_ASPECT_COLOR_BIT);
+    _textureImageView = VulkanHelper::createImageView(_ctx, _textureImage, _format, _mipLevels, VK_IMAGE_ASPECT_COLOR_BIT);
+}
+
+DeviceTexture::DeviceTexture(std::shared_ptr<VulkanContext> ctx, const void* pixelData, uint32_t width, uint32_t height, VkFormat format)
+    : _ctx(std::move(ctx)), _width(width), _height(height), _format(format)
+{
+    _mipLevels = glm::min(static_cast<int>(floor(log2(std::max(_width, _height)))) + 1, 12);
+
+    VkDeviceSize imageSize = _width * _height * 4;
+
+    // Create staging buffer
+    VkBuffer stagingBuffer;
+    VkDeviceMemory stagingBufferMemory;
+    VulkanHelper::createBuffer(_ctx, imageSize, 
+        VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, 
+        stagingBuffer, stagingBufferMemory);
+
+    void* data;
+    vkMapMemory(_ctx->device, stagingBufferMemory, 0, imageSize, 0, &data);
+    memcpy(data, pixelData, static_cast<size_t>(imageSize));
+    vkUnmapMemory(_ctx->device, stagingBufferMemory);
+
+    // Create Image
+    VulkanHelper::createImage(_ctx, _width, _height,
+        _format,
+        _mipLevels,
+        VK_SAMPLE_COUNT_1_BIT,
+        VK_IMAGE_TILING_OPTIMAL,
+        VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+        _textureImage, _textureImageMemory);
+
+    // Transition image layout to transfer destination optimal
+    VulkanHelper::transitionImageLayout(_ctx, _textureImage, _format, _mipLevels, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+
+    // Copy from staging buffer to the image
+    VulkanHelper::copyBufferToImage(_ctx, stagingBuffer, _textureImage, static_cast<uint32_t>(_width), static_cast<uint32_t>(_height));
+
+    // Staging buffer is no longer needed, so we can destroy it
+    vkDestroyBuffer(_ctx->device, stagingBuffer, nullptr); // Destroy the staging buffer
+    vkFreeMemory(_ctx->device, stagingBufferMemory, nullptr); // Free the staging buffer memory
+
+    generateMipmaps();
+
+    // Create ImageView
+    _textureImageView = VulkanHelper::createImageView(_ctx, _textureImage, _format, _mipLevels, VK_IMAGE_ASPECT_COLOR_BIT);
 }
 
 DeviceTexture::~DeviceTexture()
