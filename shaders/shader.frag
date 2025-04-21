@@ -43,7 +43,7 @@ void main() {
     vec3 normalTBN = vec3(0.0, 0.0, 1.0);
     if (material.hasNormalMapTexture == 1) {
         normalTBN = texture(normalMapTexture, fragTexCoord).rgb * 2.0 - 1.0;
-    }+
+    }
     vec3 lightDirTBN = world_to_TBN * lightDir;
     float diffuseDot = dot(normalTBN, lightDirTBN);
     
