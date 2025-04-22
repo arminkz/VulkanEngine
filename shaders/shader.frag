@@ -37,7 +37,7 @@ void main() {
     mat3 TBN_to_world = mat3(T, B, N);
     mat3 world_to_TBN = transpose(TBN_to_world); // Because its an orthonormal matrix, its inverse is just transpose.
 
-    vec3 lightPosition = vec3(4.0, 0.0, 0.0);
+    vec3 lightPosition = vec3(0.0, 0.0, 0.0);
     vec3 lightDir = normalize(lightPosition - worldPosition.xyz);
 
     vec3 normalTBN = vec3(0.0, 0.0, 1.0);
@@ -54,8 +54,8 @@ void main() {
 
         if(material.hasUnlitColorTexture == 1) {
             vec3 unlitColor = texture(unlitColorTexture, fragTexCoord).rgb;
-            color = mix(unlitColor, baseColor, smoothstep(-0.3, -0.19, diffuseDot));
+            color = mix(unlitColor, baseColor, smoothstep(-0.2, -0.09, diffuseDot));
         }
     }
-    outColor = vec4(color, 1.0); //vec4(mix(color, overlayColor/2.0, overlayColor.r), 1.0);
+    outColor = vec4(color, 1.0);
 }

@@ -18,13 +18,16 @@ private:
     std::shared_ptr<VulkanContext> _ctx;
 
     std::unique_ptr<TurnTableCamera> _camera = nullptr;
-
-    std::unique_ptr<DeviceModel> _model;
-    std::unique_ptr<DeviceModel> _model2;
-    std::unique_ptr<TextureSampler> _textureSampler;
-
     std::unique_ptr<DeviceTexture> _dummyTexture;
 
+    std::unique_ptr<TextureSampler> _textureSampler;
+
+    // std::unique_ptr<DeviceModel> _model;
+    // std::unique_ptr<DeviceModel> _model2;
+    
+    std::vector<std::unique_ptr<DeviceModel>> _models;
+
+    
     VkSwapchainKHR _swapChain = nullptr;
     VkFormat _swapChainImageFormat;
     VkExtent2D _swapChainExtent;
@@ -36,7 +39,9 @@ private:
 
     VkDescriptorSetLayout _descriptorSetLayout;
     VkDescriptorPool _descriptorPool;
-    std::vector<VkDescriptorSet> _descriptorSets;
+
+    //std::vector<VkDescriptorSet> _descriptorSets;
+    std::vector<std::vector<VkDescriptorSet>> _descriptorSets;  //_descriptorSets[ModelIndex][FrameIndex]
     
     VkPipelineLayout _pipelineLayout;
     VkPipeline _graphicsPipeline;

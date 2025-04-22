@@ -4,7 +4,7 @@
 
 namespace MeshFactory {
 
-    HostMesh createSphereMesh(float radius, int segments, int rings)
+    HostMesh createSphereMesh(float radius, int segments, int rings, bool skySphere)
     {
         HostMesh mesh;
 
@@ -46,15 +46,29 @@ namespace MeshFactory {
                 int i2 = i0 + (segments + 1);
                 int i3 = i2 + 1;
 
-                // Triangle 1
-                mesh.indices.push_back(i0);
-                mesh.indices.push_back(i2);
-                mesh.indices.push_back(i1);
+                if (skySphere) {
+                    // Triangle 1
+                    mesh.indices.push_back(i0);
+                    mesh.indices.push_back(i1);
+                    mesh.indices.push_back(i2);
 
-                // Triangle 2
-                mesh.indices.push_back(i1);
-                mesh.indices.push_back(i2);
-                mesh.indices.push_back(i3);
+                    // Triangle 2
+                    mesh.indices.push_back(i1);
+                    mesh.indices.push_back(i3);
+                    mesh.indices.push_back(i2);
+                }
+                else
+                {
+                    // Triangle 1
+                    mesh.indices.push_back(i0);
+                    mesh.indices.push_back(i2);
+                    mesh.indices.push_back(i1);
+
+                    // Triangle 2
+                    mesh.indices.push_back(i1);
+                    mesh.indices.push_back(i2);
+                    mesh.indices.push_back(i3);
+                }
             }
         }
 

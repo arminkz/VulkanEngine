@@ -2,17 +2,22 @@
 #include "geometry/DeviceMesh.h"
 #include "VulkanHelper.h"
 
-DeviceModel::DeviceModel(std::shared_ptr<VulkanContext> ctx, std::shared_ptr<DeviceMesh> mesh, glm::vec3 color)
+DeviceModel::DeviceModel(
+    std::shared_ptr<VulkanContext> ctx, 
+    std::shared_ptr<DeviceMesh> mesh, 
+    glm::mat4 modelMatrix,
+    glm::vec3 color)
     : _ctx(std::move(ctx))
     , _mesh(std::move(mesh))
 {
     _color = color;
-    _modelMatrix = glm::mat4(1.f);
+    _modelMatrix = modelMatrix;
 }
 
 DeviceModel::DeviceModel(
     std::shared_ptr<VulkanContext> ctx, 
     std::shared_ptr<DeviceMesh> mesh,
+    glm::mat4 modelMatrix,
     std::shared_ptr<DeviceTexture> baseColorTexture,
     std::shared_ptr<DeviceTexture> unlitColorTexture,
     std::shared_ptr<DeviceTexture> normalMapTexture,
@@ -28,7 +33,7 @@ DeviceModel::DeviceModel(
     , _overlayColorTexture(std::move(overlayColorTexture))
 {
     _color = glm::vec3(0.f);
-    _modelMatrix = glm::mat4(1.f);
+    _modelMatrix = modelMatrix;
 
     _material.hasBaseColorTexture = _baseColorTexture ? 1 : 0;
     _material.hasUnlitColorTexture = _unlitColorTexture ? 1 : 0;

@@ -19,8 +19,10 @@ Renderer::~Renderer()
     // Wait for any unfinished GPU tasks
     vkDeviceWaitIdle(_ctx->device);
 
-    _model = nullptr;
-    _model2 = nullptr;
+    // Free all models
+    for(size_t i=0; i<_models.size(); i++) {
+        _models[i] = nullptr;
+    }
     _textureSampler = nullptr;
     _dummyTexture = nullptr;
 
@@ -85,26 +87,48 @@ bool Renderer::initialize(SDL_Window* _window)
     uint8_t pixel[4] = { 255, 255, 255, 255 };
     _dummyTexture = std::make_unique<DeviceTexture>(_ctx, pixel, 1, 1, VK_FORMAT_R8G8B8A8_UNORM);
 
-    // Model creation
-    HostMesh hmesh = MeshFactory::createSphereMesh(1.0f, 64, 64);
-    std::shared_ptr<DeviceMesh> dmesh = std::make_shared<DeviceMesh>(_ctx, hmesh);
+
+    // //TODO: We dont need a new mesh here we can handle the radius with scaling.
+    // HostMesh hmesh2 = MeshFactory::createSphereMesh(0.5f, 64, 64); 
+    // std::shared_ptr<DeviceMesh> dmesh2 = std::make_shared<DeviceMesh>(_ctx, hmesh2);
+    // std::shared_ptr<DeviceTexture> texture2 = std::make_shared<DeviceTexture>(_ctx, "textures/2k_moon.jpg", VK_FORMAT_R8G8B8A8_SRGB);
+    //_model2 = std::make_unique<DeviceModel>(_ctx, dmesh2, texture2);
+
+    HostMesh sphere = MeshFactory::createSphereMesh(1.f, 64, 64);
+    HostMesh sphereInside = MeshFactory::createSphereMesh(1.f, 64, 64, true);
+
+    std::shared_ptr<DeviceMesh> sphereDMesh = std::make_shared<DeviceMesh>(_ctx, sphere);
+    std::shared_ptr<DeviceMesh> sphereInsideDMesh = std::make_shared<DeviceMesh>(_ctx, sphereInside);
+
+    // SkySphere
+    std::shared_ptr<DeviceTexture> skyTexture = std::make_shared<DeviceTexture>(_ctx, "textures/8k_stars_milky_way.jpg", VK_FORMAT_R8G8B8A8_SRGB);
+    glm::mat4 skyModelMat = glm::mat4(1.f);
+    skyModelMat = glm::scale(skyModelMat, glm::vec3(100.f));
+    _models.push_back(std::make_unique<DeviceModel>(_ctx, sphereInsideDMesh, skyModelMat, skyTexture));
+
+    //Sun
+    std::shared_ptr<DeviceTexture> sunTexture = std::make_shared<DeviceTexture>(_ctx, "textures/2k_sun.jpg", VK_FORMAT_R8G8B8A8_SRGB);
+    glm::mat4 sunModelMat = glm::mat4(1.f);
+    sunModelMat = glm::scale(sunModelMat, glm::vec3(3.f));
+    _models.push_back(std::make_unique<DeviceModel>(_ctx, sphereDMesh, sunModelMat, sunTexture));
+
+    // Earth
     std::shared_ptr<DeviceTexture> colorTexture = std::make_shared<DeviceTexture>(_ctx, "textures/8k_earth_daymap.jpg", VK_FORMAT_R8G8B8A8_SRGB);
     std::shared_ptr<DeviceTexture> unlitTexture = std::make_shared<DeviceTexture>(_ctx, "textures/8k_earth_nightmap.jpg", VK_FORMAT_R8G8B8A8_SRGB);
     std::shared_ptr<DeviceTexture> normalTexture = std::make_shared<DeviceTexture>(_ctx, "textures/EarthNormal.png", VK_FORMAT_R8G8B8A8_UNORM);
     std::shared_ptr<DeviceTexture> specularTexture = std::make_shared<DeviceTexture>(_ctx, "textures/EarthSpec.png", VK_FORMAT_R8G8B8A8_UNORM);
     std::shared_ptr<DeviceTexture> overlayTexture = std::make_shared<DeviceTexture>(_ctx, "textures/8k_earth_clouds.jpg", VK_FORMAT_R8G8B8A8_SRGB);
-    _model = std::make_unique<DeviceModel>(_ctx, dmesh, colorTexture, unlitTexture, normalTexture, specularTexture, overlayTexture);
+    glm::mat4 earthModelMat = glm::mat4(1.f);
+    earthModelMat = glm::translate(glm::mat4(1.f), glm::vec3(-6.f, -6.f, 0.f));
+    earthModelMat = glm::scale(earthModelMat, glm::vec3(1.f));
+    _models.push_back(std::make_unique<DeviceModel>(_ctx, sphereDMesh, earthModelMat, colorTexture, unlitTexture, normalTexture, specularTexture, overlayTexture));
 
-    HostMesh hmesh2 = MeshFactory::createSphereMesh(0.5f, 64, 64);
-    std::shared_ptr<DeviceMesh> dmesh2 = std::make_shared<DeviceMesh>(_ctx, hmesh2);
-    std::shared_ptr<DeviceTexture> texture2 = std::make_shared<DeviceTexture>(_ctx, "textures/2k_moon.jpg", VK_FORMAT_R8G8B8A8_SRGB);
-    _model2 = std::make_unique<DeviceModel>(_ctx, dmesh2, texture2);
-    
+
     //Mesh mesh = ObjLoader::load("models/viking_room.obj");
     //_model = std::make_unique<Model>(_ctx, mesh, "textures/viking_room.png");
 
     // Texture Sampler
-    _textureSampler = std::make_unique<TextureSampler>(_ctx, colorTexture ? colorTexture->getMipLevels() : 1);
+    _textureSampler = std::make_unique<TextureSampler>(_ctx, skyTexture ? skyTexture->getMipLevels() : 1);
 
     _msaaSamples = getMaxMsaaSampleCount();
     spdlog::info("Max MSAA samples: {}", static_cast<int>(_msaaSamples));
@@ -729,126 +753,129 @@ bool Renderer::createDescriptorSetLayout() {
 }
 
 bool Renderer::createDescriptorPool() {
-    std::array<VkDescriptorPoolSize, 7> poolSizes{};
-    poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    poolSizes[0].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+    // Descriptor usage counts per type
+    uint32_t totalUBOs = 2 * static_cast<uint32_t>(_models.size()) * MAX_FRAMES_IN_FLIGHT; // MVP + material
+    uint32_t totalSamplers = 5 * static_cast<uint32_t>(_models.size()) * MAX_FRAMES_IN_FLIGHT;
 
-    poolSizes[1].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    poolSizes[1].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
-
-    for(int i=2; i<7; i++){
-        poolSizes[i].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        poolSizes[i].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
-    }
-
+    std::vector<VkDescriptorPoolSize> poolSizes = {
+        { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, totalUBOs },
+        { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, totalSamplers }
+    };
 
     VkDescriptorPoolCreateInfo poolInfo{};
     poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
     poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
     poolInfo.pPoolSizes = poolSizes.data();
-    poolInfo.maxSets = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+    poolInfo.maxSets = static_cast<uint32_t>(_models.size()) * MAX_FRAMES_IN_FLIGHT;
 
-    if(vkCreateDescriptorPool(_ctx->device, &poolInfo, nullptr, &_descriptorPool) != VK_SUCCESS) {
+    if (vkCreateDescriptorPool(_ctx->device, &poolInfo, nullptr, &_descriptorPool) != VK_SUCCESS) {
         spdlog::error("Failed to create descriptor pool!");
         return false;
-    } else {
-        spdlog::info("Descriptor pool created successfully");
     }
+
+    spdlog::info("Descriptor pool created successfully");
+    return true;
 }
 
 bool Renderer::createDescriptorSets() {
     std::vector<VkDescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT, _descriptorSetLayout);
 
-    VkDescriptorSetAllocateInfo allocInfo{};
-    allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-    allocInfo.descriptorPool = _descriptorPool;
-    allocInfo.descriptorSetCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
-    allocInfo.pSetLayouts = layouts.data();
+    _descriptorSets.resize(static_cast<int>(_models.size()));
+    for(int m=0; m<_models.size(); m++) {
+        VkDescriptorSetAllocateInfo allocInfo{};
+        allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+        allocInfo.descriptorPool = _descriptorPool;
+        allocInfo.descriptorSetCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+        allocInfo.pSetLayouts = layouts.data();
+    
+        _descriptorSets[m].resize(MAX_FRAMES_IN_FLIGHT);
+        if (vkAllocateDescriptorSets(_ctx->device, &allocInfo, _descriptorSets[m].data()) != VK_SUCCESS) {
+            spdlog::error("Failed to allocate descriptor sets!");
+            return false;
+        } else {
+            spdlog::info("Descriptor sets allocated successfully");
+        }
 
-    _descriptorSets.resize(MAX_FRAMES_IN_FLIGHT);
-    if (vkAllocateDescriptorSets(_ctx->device, &allocInfo, _descriptorSets.data()) != VK_SUCCESS) {
-        spdlog::error("Failed to allocate descriptor sets!");
-        return false;
-    } else {
-        spdlog::info("Descriptor sets allocated successfully");
-    }
-
-    for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-        VkDescriptorBufferInfo bufferInfo{};
-        bufferInfo.buffer = _uniformBuffers[i];
-        bufferInfo.offset = 0;
-        bufferInfo.range = sizeof(MVP);
-
+        // Use this when texture is null
         VkDescriptorImageInfo dummyTextureInfo = _dummyTexture->getDescriptorInfo(_textureSampler->getSampler());
 
-        auto materialBufferInfo = _model->getMaterialUBO()->getDescriptorInfo();
-        auto baseColorTextureInfo = _model->getBaseColorTexture() ? _model->getBaseColorTexture()->getDescriptorInfo(_textureSampler->getSampler()) : dummyTextureInfo;
-        auto unlitColorTextureInfo = _model->getUnlitColorTexture() ? _model->getUnlitColorTexture()->getDescriptorInfo(_textureSampler->getSampler()) : dummyTextureInfo;
-        auto normalMapTextureInfo = _model->getNormalMapTexture() ? _model->getNormalMapTexture()->getDescriptorInfo(_textureSampler->getSampler()) : dummyTextureInfo;
-        auto specularTextureInfo = _model->getSpecularTexture() ? _model->getSpecularTexture()->getDescriptorInfo(_textureSampler->getSampler()) : dummyTextureInfo;
-        auto overlayColorTextureInfo = _model->getSpecularTexture() ? _model->getOverlayColorTexture()->getDescriptorInfo(_textureSampler->getSampler()) : dummyTextureInfo;
-
-        // Bind the buffer to the descriptor set
-        std::array<VkWriteDescriptorSet, 7> descriptorWrites{};
-        descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        descriptorWrites[0].dstSet = _descriptorSets[i];
-        descriptorWrites[0].dstBinding = 0;
-        descriptorWrites[0].dstArrayElement = 0;
-        descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        descriptorWrites[0].descriptorCount = 1;
-        descriptorWrites[0].pBufferInfo = &bufferInfo;
-
-        descriptorWrites[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        descriptorWrites[1].dstSet = _descriptorSets[i];
-        descriptorWrites[1].dstBinding = 1;
-        descriptorWrites[1].dstArrayElement = 0;
-        descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        descriptorWrites[1].descriptorCount = 1;
-        descriptorWrites[1].pBufferInfo = &materialBufferInfo;
-
-        // Bind the image to the descriptor set
-        descriptorWrites[2].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        descriptorWrites[2].dstSet = _descriptorSets[i];
-        descriptorWrites[2].dstBinding = 2;
-        descriptorWrites[2].dstArrayElement = 0;
-        descriptorWrites[2].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        descriptorWrites[2].descriptorCount = 1;
-        descriptorWrites[2].pImageInfo = &baseColorTextureInfo;
-
-        descriptorWrites[3].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        descriptorWrites[3].dstSet = _descriptorSets[i];
-        descriptorWrites[3].dstBinding = 3;
-        descriptorWrites[3].dstArrayElement = 0;
-        descriptorWrites[3].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        descriptorWrites[3].descriptorCount = 1;
-        descriptorWrites[3].pImageInfo = &unlitColorTextureInfo;
-
-        descriptorWrites[4].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        descriptorWrites[4].dstSet = _descriptorSets[i];
-        descriptorWrites[4].dstBinding = 4;
-        descriptorWrites[4].dstArrayElement = 0;
-        descriptorWrites[4].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        descriptorWrites[4].descriptorCount = 1;
-        descriptorWrites[4].pImageInfo = &normalMapTextureInfo;
-
-        descriptorWrites[5].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        descriptorWrites[5].dstSet = _descriptorSets[i];
-        descriptorWrites[5].dstBinding = 5;
-        descriptorWrites[5].dstArrayElement = 0;
-        descriptorWrites[5].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        descriptorWrites[5].descriptorCount = 1;
-        descriptorWrites[5].pImageInfo = &specularTextureInfo;
-
-        descriptorWrites[6].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        descriptorWrites[6].dstSet = _descriptorSets[i];
-        descriptorWrites[6].dstBinding = 6;
-        descriptorWrites[6].dstArrayElement = 0;
-        descriptorWrites[6].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        descriptorWrites[6].descriptorCount = 1;
-        descriptorWrites[6].pImageInfo = &overlayColorTextureInfo;
-
-        vkUpdateDescriptorSets(_ctx->device, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
+        for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+            VkDescriptorBufferInfo bufferInfo{};
+            bufferInfo.buffer = _uniformBuffers[i];
+            bufferInfo.offset = 0;
+            bufferInfo.range = sizeof(MVP);
+    
+            auto materialBufferInfo = _models[m]->getMaterialUBO()->getDescriptorInfo();
+            auto baseColorTextureInfo = _models[m]->getBaseColorTexture() ? _models[m]->getBaseColorTexture()->getDescriptorInfo(_textureSampler->getSampler()) : dummyTextureInfo;
+            auto unlitColorTextureInfo = _models[m]->getUnlitColorTexture() ? _models[m]->getUnlitColorTexture()->getDescriptorInfo(_textureSampler->getSampler()) : dummyTextureInfo;
+            auto normalMapTextureInfo = _models[m]->getNormalMapTexture() ? _models[m]->getNormalMapTexture()->getDescriptorInfo(_textureSampler->getSampler()) : dummyTextureInfo;
+            auto specularTextureInfo = _models[m]->getSpecularTexture() ? _models[m]->getSpecularTexture()->getDescriptorInfo(_textureSampler->getSampler()) : dummyTextureInfo;
+            auto overlayColorTextureInfo = _models[m]->getSpecularTexture() ? _models[m]->getOverlayColorTexture()->getDescriptorInfo(_textureSampler->getSampler()) : dummyTextureInfo;
+    
+            // Bind the buffer to the descriptor set
+            std::array<VkWriteDescriptorSet, 7> descriptorWrites{};
+            descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            descriptorWrites[0].dstSet = _descriptorSets[m][i];
+            descriptorWrites[0].dstBinding = 0;
+            descriptorWrites[0].dstArrayElement = 0;
+            descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+            descriptorWrites[0].descriptorCount = 1;
+            descriptorWrites[0].pBufferInfo = &bufferInfo;
+    
+            descriptorWrites[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            descriptorWrites[1].dstSet = _descriptorSets[m][i];
+            descriptorWrites[1].dstBinding = 1;
+            descriptorWrites[1].dstArrayElement = 0;
+            descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+            descriptorWrites[1].descriptorCount = 1;
+            descriptorWrites[1].pBufferInfo = &materialBufferInfo;
+    
+            // Bind the image to the descriptor set
+            descriptorWrites[2].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            descriptorWrites[2].dstSet = _descriptorSets[m][i];
+            descriptorWrites[2].dstBinding = 2;
+            descriptorWrites[2].dstArrayElement = 0;
+            descriptorWrites[2].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            descriptorWrites[2].descriptorCount = 1;
+            descriptorWrites[2].pImageInfo = &baseColorTextureInfo;
+    
+            descriptorWrites[3].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            descriptorWrites[3].dstSet = _descriptorSets[m][i];
+            descriptorWrites[3].dstBinding = 3;
+            descriptorWrites[3].dstArrayElement = 0;
+            descriptorWrites[3].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            descriptorWrites[3].descriptorCount = 1;
+            descriptorWrites[3].pImageInfo = &unlitColorTextureInfo;
+    
+            descriptorWrites[4].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            descriptorWrites[4].dstSet = _descriptorSets[m][i];
+            descriptorWrites[4].dstBinding = 4;
+            descriptorWrites[4].dstArrayElement = 0;
+            descriptorWrites[4].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            descriptorWrites[4].descriptorCount = 1;
+            descriptorWrites[4].pImageInfo = &normalMapTextureInfo;
+    
+            descriptorWrites[5].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            descriptorWrites[5].dstSet = _descriptorSets[m][i];
+            descriptorWrites[5].dstBinding = 5;
+            descriptorWrites[5].dstArrayElement = 0;
+            descriptorWrites[5].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            descriptorWrites[5].descriptorCount = 1;
+            descriptorWrites[5].pImageInfo = &specularTextureInfo;
+    
+            descriptorWrites[6].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            descriptorWrites[6].dstSet = _descriptorSets[m][i];
+            descriptorWrites[6].dstBinding = 6;
+            descriptorWrites[6].dstArrayElement = 0;
+            descriptorWrites[6].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            descriptorWrites[6].descriptorCount = 1;
+            descriptorWrites[6].pImageInfo = &overlayColorTextureInfo;
+    
+            vkUpdateDescriptorSets(_ctx->device, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
+        }
     }
+
+
 }
 
 bool Renderer::createGraphicsPipeline() {
@@ -966,13 +993,20 @@ bool Renderer::createGraphicsPipeline() {
     dynamicState.dynamicStateCount = static_cast<uint32_t>(dynamicStates.size());
     dynamicState.pDynamicStates = dynamicStates.data();
 
+    // Push constants
+    VkPushConstantRange pushConstantRange{};
+    pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+    pushConstantRange.offset = 0;
+    pushConstantRange.size = sizeof(glm::mat4);
+
     // Pipeline layout
     // This is where we specify the pipeline layout (e.g., descriptor sets, push constants, etc.)
     VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
     pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
     pipelineLayoutInfo.setLayoutCount = 1;
     pipelineLayoutInfo.pSetLayouts = &_descriptorSetLayout;
-    pipelineLayoutInfo.pushConstantRangeCount = 0;
+    pipelineLayoutInfo.pushConstantRangeCount = 1;
+    pipelineLayoutInfo.pPushConstantRanges = &pushConstantRange;
 
     if (vkCreatePipelineLayout(_ctx->device, &pipelineLayoutInfo, nullptr, &_pipelineLayout) != VK_SUCCESS) {
         throw std::runtime_error("failed to create pipeline layout!");
@@ -1070,11 +1104,11 @@ void Renderer::updateUniformBuffer(uint32_t currentImage) {
     MVP mvp{};
     //mvp.model = glm::rotate(glm::mat4(1.0f), 0.1f * time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
     //mvp.model = glm::translate(glm::mat4(1.0f), glm::vec3(-2.f,-2.f,0.f));
-    mvp.model = glm::rotate(glm::mat4(1.0f), 0.05f * time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+    //mvp.model = glm::rotate(glm::mat4(1.0f), 0.05f * time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
 
-    //mvp.model = glm::mat4(1.0f);
+    mvp.model = glm::mat4(1.0f);
     mvp.view = _camera->getViewMatrix(); 
-    mvp.projection = glm::perspective(glm::radians(45.0f), (float)_swapChainExtent.width / (float)_swapChainExtent.height, 0.1f, 100.0f);
+    mvp.projection = glm::perspective(glm::radians(45.0f), (float)_swapChainExtent.width / (float)_swapChainExtent.height, 0.1f, 150.0f);
     mvp.projection[1][1] *= -1; // Invert Y axis for Vulkan
 
     memcpy(_uniformBuffersMapped[currentImage], &mvp, sizeof(mvp)); // Copy the MVP data to the mapped memory (Upload to GPU)
@@ -1226,18 +1260,20 @@ void Renderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t image
     VkRect2D scissor{};
     scissor.offset = {0, 0};
     scissor.extent = _swapChainExtent;
-    vkCmdSetScissor(commandBuffer, 0, 1, &scissor);         
+    vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
     
-    VkBuffer vertexBuffers[] = {_model->getDeviceMesh()->getVertexBuffer()};
-    VkDeviceSize offsets[] = {0};
-    vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets); // We can have multiple vertex buffers
-    vkCmdBindIndexBuffer(commandBuffer, _model->getDeviceMesh()->getIndexBuffer(), 0, VK_INDEX_TYPE_UINT32); // We can only use one index buffer at a time
+    // Iterate over scene models
+    for(int m=0; m<static_cast<int>(_models.size()); m++) {
+        VkBuffer vertexBuffers[] = {_models[m]->getDeviceMesh()->getVertexBuffer()};
+        VkDeviceSize offsets[] = {0};
+        vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets); // We can have multiple vertex buffers
+        vkCmdBindIndexBuffer(commandBuffer, _models[m]->getDeviceMesh()->getIndexBuffer(), 0, VK_INDEX_TYPE_UINT32); // We can only use one index buffer at a time
+        vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, _pipelineLayout, 0, 1, &_descriptorSets[m][_currentFrame], 0, nullptr);
+        vkCmdPushConstants(commandBuffer, _pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(glm::mat4), &_models[m]->getModelMatrix());
 
-    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, _pipelineLayout, 0, 1, &_descriptorSets[_currentFrame], 0, nullptr);
-
-    //vkCmdDraw(commandBuffer, static_cast<uint32_t>(vertices.size()), 1, 0, 0);
-    vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(_model->getDeviceMesh()->getIndicesCount()), 1, 0, 0, 0);
-
+        vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(_models[m]->getDeviceMesh()->getIndicesCount()), 1, 0, 0, 0);
+    }
+    
     vkCmdEndRenderPass(commandBuffer);
 
     if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {

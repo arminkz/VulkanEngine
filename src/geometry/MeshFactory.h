@@ -4,6 +4,6 @@
 
 namespace MeshFactory {
 
-    HostMesh createSphereMesh(float radius, int segments, int rings);
+    HostMesh createSphereMesh(float radius, int segments, int rings, bool skySphere = false);
 
 } 

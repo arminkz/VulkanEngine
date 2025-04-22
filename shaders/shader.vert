@@ -1,5 +1,9 @@
 #version 450
 
+layout(push_constant) uniform PushConstants {
+    mat4 model;
+} pc;
+
 layout(binding = 0) uniform MVP { // Model-View-Projection matrix
     mat4 model;
     mat4 view;
@@ -20,9 +24,9 @@ layout(location = 3) out vec3 worldNormal;
 layout(location = 4) out vec3 worldTangent;
 
 void main() {
-    worldPosition = mvp.model * vec4(inPosition, 1.0);
-    worldNormal = (mvp.model * vec4(inNormal, 0.0)).xyz;
-    worldTangent = (mvp.model * vec4(inTangent, 0.0)).xyz;
+    worldPosition = pc.model * vec4(inPosition, 1.0);
+    worldNormal = (pc.model * vec4(inNormal, 0.0)).xyz;
+    worldTangent = (pc.model * vec4(inTangent, 0.0)).xyz;
 
     gl_Position = mvp.proj * mvp.view * worldPosition;
     fragColor = inColor;

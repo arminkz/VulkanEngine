@@ -9,10 +9,17 @@
 class DeviceModel
 {
 public:
-    DeviceModel(std::shared_ptr<VulkanContext> ctx, std::shared_ptr<DeviceMesh> mesh, glm::vec3 color);
+    DeviceModel(
+        std::shared_ptr<VulkanContext> ctx,
+        std::shared_ptr<DeviceMesh> mesh,
+        glm::mat4 modelMatrix,
+        glm::vec3 color
+    );
+
     DeviceModel(
         std::shared_ptr<VulkanContext> ctx, 
         std::shared_ptr<DeviceMesh> mesh,
+        glm::mat4 modelMatrix,
         std::shared_ptr<DeviceTexture> baseColorTexture = nullptr,
         std::shared_ptr<DeviceTexture> unlitColorTexture = nullptr,
         std::shared_ptr<DeviceTexture> normalMapTexture = nullptr,
@@ -29,6 +36,9 @@ public:
     const DeviceTexture* getNormalMapTexture() const { return _normalMapTexture.get(); }
     const DeviceTexture* getSpecularTexture() const { return _specularTexture.get(); }
     const DeviceTexture* getOverlayColorTexture() const { return _overlayColorTexture.get(); }
+
+    glm::mat4 getModelMatrix() const { return _modelMatrix; }
+    void setModelMatrix(glm::mat4 modelMatrix) { _modelMatrix = modelMatrix; }
 
     struct Material {
         alignas(4)  int hasBaseColorTexture;
