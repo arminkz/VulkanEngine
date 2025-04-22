@@ -26,6 +26,10 @@ Renderer::~Renderer()
     _textureSampler = nullptr;
     _dummyTexture = nullptr;
 
+    for(int i=0;i<MAX_FRAMES_IN_FLIGHT; i++) {
+        _sceneInfoUBOs[i] = nullptr;
+    }
+
     cleanupSwapChain();
 
     // Clean up Vulkan resources
@@ -87,6 +91,13 @@ bool Renderer::initialize(SDL_Window* _window)
     uint8_t pixel[4] = { 255, 255, 255, 255 };
     _dummyTexture = std::make_unique<DeviceTexture>(_ctx, pixel, 1, 1, VK_FORMAT_R8G8B8A8_UNORM);
 
+    // Scene UBO
+    SceneInfo si{};
+    si.time = 0.f;
+    for(int i=0; i<MAX_FRAMES_IN_FLIGHT; i++) {
+        _sceneInfoUBOs[i] = std::make_unique<UniformBuffer<SceneInfo>>(_ctx);
+        _sceneInfoUBOs[i]->update(si);
+    }
 
     // //TODO: We dont need a new mesh here we can handle the radius with scaling.
     // HostMesh hmesh2 = MeshFactory::createSphereMesh(0.5f, 64, 64); 
@@ -108,9 +119,12 @@ bool Renderer::initialize(SDL_Window* _window)
 
     //Sun
     std::shared_ptr<DeviceTexture> sunTexture = std::make_shared<DeviceTexture>(_ctx, "textures/2k_sun.jpg", VK_FORMAT_R8G8B8A8_SRGB);
+    std::shared_ptr<DeviceTexture> sunPerlinTexture = std::make_shared<DeviceTexture>(_ctx, "textures/perlin.png", VK_FORMAT_R8G8B8A8_UNORM);
     glm::mat4 sunModelMat = glm::mat4(1.f);
     sunModelMat = glm::scale(sunModelMat, glm::vec3(3.f));
-    _models.push_back(std::make_unique<DeviceModel>(_ctx, sphereDMesh, sunModelMat, sunTexture));
+    _models.push_back(std::make_unique<DeviceModel>(_ctx, sphereDMesh, sunModelMat, sunTexture, nullptr, nullptr, nullptr, sunPerlinTexture));
+    _models[1]->material.sunShadeMode = 1;
+    _models[1]->updateMaterial();
 
     // Earth
     std::shared_ptr<DeviceTexture> colorTexture = std::make_shared<DeviceTexture>(_ctx, "textures/8k_earth_daymap.jpg", VK_FORMAT_R8G8B8A8_SRGB);
@@ -703,7 +717,7 @@ bool Renderer::createRenderPass() {
 
 bool Renderer::createDescriptorSetLayout() {
 
-    std::array<VkDescriptorSetLayoutBinding, 7> bindings;
+    std::array<VkDescriptorSetLayoutBinding, 8> bindings;
 
     // Create descriptor set layout for UBO (Uniform Buffer Object)
     // This layout will be used to bind the uniform buffer to the vertex shader (MVP)
@@ -715,7 +729,7 @@ bool Renderer::createDescriptorSetLayout() {
     uboLayoutBinding.pImmutableSamplers = nullptr; // Optional
     bindings[0] = uboLayoutBinding;
 
-    // This layout will be used to bind the uniform buffer to the fragment shader (Material)
+    // This layout will be used to bind the per model uniform buffer to the fragment shader (Material)
     VkDescriptorSetLayoutBinding materialUBOLayoutBinding{};
     materialUBOLayoutBinding.binding = 1; // This should match the number in shader.
     materialUBOLayoutBinding.descriptorCount = 1;
@@ -724,10 +738,20 @@ bool Renderer::createDescriptorSetLayout() {
     materialUBOLayoutBinding.pImmutableSamplers = nullptr; // Optional
     bindings[1] = materialUBOLayoutBinding;
 
+
+    // This layout will be used to bind the per scene uniform buffer to the fragment shader (SceneInfo)
+    VkDescriptorSetLayoutBinding sceneUBOLayoutBinding{};
+    sceneUBOLayoutBinding.binding = 2; // This should match the number in shader.
+    sceneUBOLayoutBinding.descriptorCount = 1;
+    sceneUBOLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    sceneUBOLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+    sceneUBOLayoutBinding.pImmutableSamplers = nullptr; // Optional
+    bindings[2] = sceneUBOLayoutBinding;
+
     // Create descriptor set layout for textures
     // This layout will be used to bind the texture sampler to the fragment shader (texture)
     // We have 5 textures.
-    for (int i=2; i<7; i++) {
+    for (int i=3; i<8; i++) {
         VkDescriptorSetLayoutBinding textureLayoutBinding{};
         textureLayoutBinding.binding = i;
         textureLayoutBinding.descriptorCount = 1;
@@ -754,7 +778,7 @@ bool Renderer::createDescriptorSetLayout() {
 
 bool Renderer::createDescriptorPool() {
     // Descriptor usage counts per type
-    uint32_t totalUBOs = 2 * static_cast<uint32_t>(_models.size()) * MAX_FRAMES_IN_FLIGHT; // MVP + material
+    uint32_t totalUBOs = 3 * static_cast<uint32_t>(_models.size()) * MAX_FRAMES_IN_FLIGHT; // MVP + material + scene
     uint32_t totalSamplers = 5 * static_cast<uint32_t>(_models.size()) * MAX_FRAMES_IN_FLIGHT;
 
     std::vector<VkDescriptorPoolSize> poolSizes = {
@@ -781,102 +805,84 @@ bool Renderer::createDescriptorSets() {
     std::vector<VkDescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT, _descriptorSetLayout);
 
     _descriptorSets.resize(static_cast<int>(_models.size()));
-    for(int m=0; m<_models.size(); m++) {
+
+    // Lambda to create VkWriteDescriptorSet for buffers
+    auto writeBuffer = [](VkDescriptorSet dstSet, uint32_t binding, VkDescriptorBufferInfo* info) -> VkWriteDescriptorSet {
+        VkWriteDescriptorSet write{};
+        write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        write.dstSet = dstSet;
+        write.dstBinding = binding;
+        write.dstArrayElement = 0;
+        write.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        write.descriptorCount = 1;
+        write.pBufferInfo = info;
+        return write;
+    };
+
+    // Lambda to create VkWriteDescriptorSet for image samplers
+    auto writeImage = [](VkDescriptorSet dstSet, uint32_t binding, VkDescriptorImageInfo* info) -> VkWriteDescriptorSet {
+        VkWriteDescriptorSet write{};
+        write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        write.dstSet = dstSet;
+        write.dstBinding = binding;
+        write.dstArrayElement = 0;
+        write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        write.descriptorCount = 1;
+        write.pImageInfo = info;
+        return write;
+    };
+
+    for (size_t m = 0; m < _models.size(); ++m) {
         VkDescriptorSetAllocateInfo allocInfo{};
         allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
         allocInfo.descriptorPool = _descriptorPool;
         allocInfo.descriptorSetCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
         allocInfo.pSetLayouts = layouts.data();
-    
+
         _descriptorSets[m].resize(MAX_FRAMES_IN_FLIGHT);
+
         if (vkAllocateDescriptorSets(_ctx->device, &allocInfo, _descriptorSets[m].data()) != VK_SUCCESS) {
             spdlog::error("Failed to allocate descriptor sets!");
             return false;
-        } else {
-            spdlog::info("Descriptor sets allocated successfully");
         }
 
         // Use this when texture is null
         VkDescriptorImageInfo dummyTextureInfo = _dummyTexture->getDescriptorInfo(_textureSampler->getSampler());
 
-        for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-            VkDescriptorBufferInfo bufferInfo{};
-            bufferInfo.buffer = _uniformBuffers[i];
-            bufferInfo.offset = 0;
-            bufferInfo.range = sizeof(MVP);
-    
+        for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
+            //TODO: use UniformBuffer<T> for this
+            VkDescriptorBufferInfo mvpBufferInfo{};
+            mvpBufferInfo.buffer = _uniformBuffers[i];
+            mvpBufferInfo.offset = 0;
+            mvpBufferInfo.range = sizeof(MVP);
+
             auto materialBufferInfo = _models[m]->getMaterialUBO()->getDescriptorInfo();
-            auto baseColorTextureInfo = _models[m]->getBaseColorTexture() ? _models[m]->getBaseColorTexture()->getDescriptorInfo(_textureSampler->getSampler()) : dummyTextureInfo;
-            auto unlitColorTextureInfo = _models[m]->getUnlitColorTexture() ? _models[m]->getUnlitColorTexture()->getDescriptorInfo(_textureSampler->getSampler()) : dummyTextureInfo;
-            auto normalMapTextureInfo = _models[m]->getNormalMapTexture() ? _models[m]->getNormalMapTexture()->getDescriptorInfo(_textureSampler->getSampler()) : dummyTextureInfo;
-            auto specularTextureInfo = _models[m]->getSpecularTexture() ? _models[m]->getSpecularTexture()->getDescriptorInfo(_textureSampler->getSampler()) : dummyTextureInfo;
-            auto overlayColorTextureInfo = _models[m]->getSpecularTexture() ? _models[m]->getOverlayColorTexture()->getDescriptorInfo(_textureSampler->getSampler()) : dummyTextureInfo;
-    
-            // Bind the buffer to the descriptor set
-            std::array<VkWriteDescriptorSet, 7> descriptorWrites{};
-            descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-            descriptorWrites[0].dstSet = _descriptorSets[m][i];
-            descriptorWrites[0].dstBinding = 0;
-            descriptorWrites[0].dstArrayElement = 0;
-            descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-            descriptorWrites[0].descriptorCount = 1;
-            descriptorWrites[0].pBufferInfo = &bufferInfo;
-    
-            descriptorWrites[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-            descriptorWrites[1].dstSet = _descriptorSets[m][i];
-            descriptorWrites[1].dstBinding = 1;
-            descriptorWrites[1].dstArrayElement = 0;
-            descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-            descriptorWrites[1].descriptorCount = 1;
-            descriptorWrites[1].pBufferInfo = &materialBufferInfo;
-    
-            // Bind the image to the descriptor set
-            descriptorWrites[2].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-            descriptorWrites[2].dstSet = _descriptorSets[m][i];
-            descriptorWrites[2].dstBinding = 2;
-            descriptorWrites[2].dstArrayElement = 0;
-            descriptorWrites[2].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-            descriptorWrites[2].descriptorCount = 1;
-            descriptorWrites[2].pImageInfo = &baseColorTextureInfo;
-    
-            descriptorWrites[3].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-            descriptorWrites[3].dstSet = _descriptorSets[m][i];
-            descriptorWrites[3].dstBinding = 3;
-            descriptorWrites[3].dstArrayElement = 0;
-            descriptorWrites[3].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-            descriptorWrites[3].descriptorCount = 1;
-            descriptorWrites[3].pImageInfo = &unlitColorTextureInfo;
-    
-            descriptorWrites[4].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-            descriptorWrites[4].dstSet = _descriptorSets[m][i];
-            descriptorWrites[4].dstBinding = 4;
-            descriptorWrites[4].dstArrayElement = 0;
-            descriptorWrites[4].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-            descriptorWrites[4].descriptorCount = 1;
-            descriptorWrites[4].pImageInfo = &normalMapTextureInfo;
-    
-            descriptorWrites[5].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-            descriptorWrites[5].dstSet = _descriptorSets[m][i];
-            descriptorWrites[5].dstBinding = 5;
-            descriptorWrites[5].dstArrayElement = 0;
-            descriptorWrites[5].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-            descriptorWrites[5].descriptorCount = 1;
-            descriptorWrites[5].pImageInfo = &specularTextureInfo;
-    
-            descriptorWrites[6].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-            descriptorWrites[6].dstSet = _descriptorSets[m][i];
-            descriptorWrites[6].dstBinding = 6;
-            descriptorWrites[6].dstArrayElement = 0;
-            descriptorWrites[6].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-            descriptorWrites[6].descriptorCount = 1;
-            descriptorWrites[6].pImageInfo = &overlayColorTextureInfo;
-    
+            auto sceneBufferInfo = _sceneInfoUBOs[i]->getDescriptorInfo();
+
+            auto baseColorInfo = _models[m]->getBaseColorTexture() ? _models[m]->getBaseColorTexture()->getDescriptorInfo(_textureSampler->getSampler()) : dummyTextureInfo;
+            auto unlitColorInfo = _models[m]->getUnlitColorTexture() ? _models[m]->getUnlitColorTexture()->getDescriptorInfo(_textureSampler->getSampler()) : dummyTextureInfo;
+            auto normalMapInfo = _models[m]->getNormalMapTexture() ? _models[m]->getNormalMapTexture()->getDescriptorInfo(_textureSampler->getSampler()) : dummyTextureInfo;
+            auto specularInfo = _models[m]->getSpecularTexture() ? _models[m]->getSpecularTexture()->getDescriptorInfo(_textureSampler->getSampler()) : dummyTextureInfo;
+            auto overlayColorInfo = _models[m]->getOverlayColorTexture() ? _models[m]->getOverlayColorTexture()->getDescriptorInfo(_textureSampler->getSampler()) : dummyTextureInfo;
+
+            std::array<VkWriteDescriptorSet, 8> descriptorWrites{
+                writeBuffer(_descriptorSets[m][i], 0, &mvpBufferInfo),
+                writeBuffer(_descriptorSets[m][i], 1, &materialBufferInfo),
+                writeBuffer(_descriptorSets[m][i], 2, &sceneBufferInfo), // This is not per model ....
+                writeImage(_descriptorSets[m][i], 3, &baseColorInfo),
+                writeImage(_descriptorSets[m][i], 4, &unlitColorInfo),
+                writeImage(_descriptorSets[m][i], 5, &normalMapInfo),
+                writeImage(_descriptorSets[m][i], 6, &specularInfo),
+                writeImage(_descriptorSets[m][i], 7, &overlayColorInfo),
+            };
+
             vkUpdateDescriptorSets(_ctx->device, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
         }
     }
 
-
+    return true;
 }
+
 
 bool Renderer::createGraphicsPipeline() {
     // Load the shader code from binary files
@@ -1102,16 +1108,17 @@ void Renderer::updateUniformBuffer(uint32_t currentImage) {
     float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
 
     MVP mvp{};
-    //mvp.model = glm::rotate(glm::mat4(1.0f), 0.1f * time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-    //mvp.model = glm::translate(glm::mat4(1.0f), glm::vec3(-2.f,-2.f,0.f));
-    //mvp.model = glm::rotate(glm::mat4(1.0f), 0.05f * time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-
     mvp.model = glm::mat4(1.0f);
     mvp.view = _camera->getViewMatrix(); 
     mvp.projection = glm::perspective(glm::radians(45.0f), (float)_swapChainExtent.width / (float)_swapChainExtent.height, 0.1f, 150.0f);
     mvp.projection[1][1] *= -1; // Invert Y axis for Vulkan
 
     memcpy(_uniformBuffersMapped[currentImage], &mvp, sizeof(mvp)); // Copy the MVP data to the mapped memory (Upload to GPU)
+
+    // Update Scene Info
+    SceneInfo si{};
+    si.time = time;
+    _sceneInfoUBOs[currentImage]->update(si);
 }
 
 

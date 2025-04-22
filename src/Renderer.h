@@ -22,8 +22,10 @@ private:
 
     std::unique_ptr<TextureSampler> _textureSampler;
 
-    // std::unique_ptr<DeviceModel> _model;
-    // std::unique_ptr<DeviceModel> _model2;
+    struct SceneInfo {
+        alignas(4) float time;
+    };
+    std::array<std::unique_ptr<UniformBuffer<SceneInfo>>, MAX_FRAMES_IN_FLIGHT> _sceneInfoUBOs;
     
     std::vector<std::unique_ptr<DeviceModel>> _models;
 

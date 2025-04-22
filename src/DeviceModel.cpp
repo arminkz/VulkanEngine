@@ -35,16 +35,17 @@ DeviceModel::DeviceModel(
     _color = glm::vec3(0.f);
     _modelMatrix = modelMatrix;
 
-    _material.hasBaseColorTexture = _baseColorTexture ? 1 : 0;
-    _material.hasUnlitColorTexture = _unlitColorTexture ? 1 : 0;
-    _material.hasNormalMapTexture = _normalMapTexture ? 1 : 0;
-    _material.hasSpecularTexture = _specularTexture ? 1 : 0;
-    _material.hasOverlayColorTexture = _overlayColorTexture ? 1 : 0;
-    _material.ambientStrength = 0.1f;
-    _material.specularStrength = 5.0f;
+    material.hasBaseColorTexture = _baseColorTexture ? 1 : 0;
+    material.hasUnlitColorTexture = _unlitColorTexture ? 1 : 0;
+    material.hasNormalMapTexture = _normalMapTexture ? 1 : 0;
+    material.hasSpecularTexture = _specularTexture ? 1 : 0;
+    material.hasOverlayColorTexture = _overlayColorTexture ? 1 : 0;
+    material.ambientStrength = 0.1f;
+    material.specularStrength = 5.0f;
+    material.sunShadeMode = 0;
 
     _materialUBO = std::make_unique<UniformBuffer<Material>>(_ctx);
-    _materialUBO->update(_material);
+    _materialUBO->update(material);
 }
 
 DeviceModel::~DeviceModel()

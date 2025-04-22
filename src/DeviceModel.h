@@ -50,9 +50,12 @@ public:
         alignas(4)  float ambientStrength;
         alignas(4)  float specularStrength;
         alignas(4)  float overlayOffset;
-    };
+
+        alignas(4)  int sunShadeMode;
+    } material;
 
     const UniformBuffer<Material>* getMaterialUBO() const { return _materialUBO.get(); }
+    void updateMaterial() { _materialUBO->update(material); }
 
 private:
     std::shared_ptr<VulkanContext> _ctx;
@@ -68,7 +71,6 @@ private:
     glm::vec3 _color;
     glm::mat4 _modelMatrix;
 
-    Material _material;
     std::unique_ptr<UniformBuffer<Material>> _materialUBO;
     
 };
