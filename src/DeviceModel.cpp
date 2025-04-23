@@ -41,7 +41,7 @@ DeviceModel::DeviceModel(
     material.hasSpecularTexture = _specularTexture ? 1 : 0;
     material.hasOverlayColorTexture = _overlayColorTexture ? 1 : 0;
     material.ambientStrength = 0.1f;
-    material.specularStrength = 5.0f;
+    material.specularStrength = 3.0f;
     material.sunShadeMode = 0;
 
     _materialUBO = std::make_unique<UniformBuffer<Material>>(_ctx);

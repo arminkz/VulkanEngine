@@ -3,7 +3,7 @@
 
 struct Vertex {
     glm::vec3 pos;
-    glm::vec3 color;
+    glm::vec4 color;
     glm::vec2 texCoord;
     glm::vec3 normal;
     glm::vec3 tangent;
@@ -21,7 +21,7 @@ namespace std {
     template<> struct hash<Vertex> {
         size_t operator()(Vertex const& vertex) const {
             size_t h1 = hash<glm::vec3>()(vertex.pos);
-            size_t h2 = hash<glm::vec3>()(vertex.color);
+            size_t h2 = hash<glm::vec4>()(vertex.color);
             size_t h3 = hash<glm::vec2>()(vertex.texCoord);
             size_t h4 = hash<glm::vec3>()(vertex.normal);
             size_t h5 = hash<glm::vec3>()(vertex.tangent);

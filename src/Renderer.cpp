@@ -85,37 +85,40 @@ bool Renderer::initialize(SDL_Window* _window)
     createVulkanContext();
 
     // Create Camera
-    _camera = std::make_unique<TurnTableCamera>();
+    Camera::CameraParams cp{};
+    cp.target = glm::vec3(-36.f, 0.f, 0.f);
+    _camera = std::make_unique<Camera>(cp);
 
     // Create Dummy Texture
     uint8_t pixel[4] = { 255, 255, 255, 255 };
     _dummyTexture = std::make_unique<DeviceTexture>(_ctx, pixel, 1, 1, VK_FORMAT_R8G8B8A8_UNORM);
 
     // Scene UBO
-    SceneInfo si{};
-    si.time = 0.f;
+    _sceneInfo.time = 0.f;
+    _sceneInfo.cameraPosition = _camera->getPosition();
+    _sceneInfo.lightColor = glm::vec3(1.f);
     for(int i=0; i<MAX_FRAMES_IN_FLIGHT; i++) {
         _sceneInfoUBOs[i] = std::make_unique<UniformBuffer<SceneInfo>>(_ctx);
-        _sceneInfoUBOs[i]->update(si);
+        _sceneInfoUBOs[i]->update(_sceneInfo);
     }
 
-    // //TODO: We dont need a new mesh here we can handle the radius with scaling.
-    // HostMesh hmesh2 = MeshFactory::createSphereMesh(0.5f, 64, 64); 
-    // std::shared_ptr<DeviceMesh> dmesh2 = std::make_shared<DeviceMesh>(_ctx, hmesh2);
-    // std::shared_ptr<DeviceTexture> texture2 = std::make_shared<DeviceTexture>(_ctx, "textures/2k_moon.jpg", VK_FORMAT_R8G8B8A8_SRGB);
-    //_model2 = std::make_unique<DeviceModel>(_ctx, dmesh2, texture2);
 
     HostMesh sphere = MeshFactory::createSphereMesh(1.f, 64, 64);
     HostMesh sphereInside = MeshFactory::createSphereMesh(1.f, 64, 64, true);
+    HostMesh ring = MeshFactory::createAnnulusMesh(1.3f, 2.2f, 64);
 
     std::shared_ptr<DeviceMesh> sphereDMesh = std::make_shared<DeviceMesh>(_ctx, sphere);
     std::shared_ptr<DeviceMesh> sphereInsideDMesh = std::make_shared<DeviceMesh>(_ctx, sphereInside);
+    std::shared_ptr<DeviceMesh> ringDMesh = std::make_shared<DeviceMesh>(_ctx, ring);
 
     // SkySphere
     std::shared_ptr<DeviceTexture> skyTexture = std::make_shared<DeviceTexture>(_ctx, "textures/8k_stars_milky_way.jpg", VK_FORMAT_R8G8B8A8_SRGB);
     glm::mat4 skyModelMat = glm::mat4(1.f);
     skyModelMat = glm::scale(skyModelMat, glm::vec3(100.f));
     _models.push_back(std::make_unique<DeviceModel>(_ctx, sphereInsideDMesh, skyModelMat, skyTexture));
+    _models[0]->material.ambientStrength = 0.3f;
+    _models[0]->material.specularStrength = 0.0f;
+    _models[0]->updateMaterial();
 
     //Sun
     std::shared_ptr<DeviceTexture> sunTexture = std::make_shared<DeviceTexture>(_ctx, "textures/2k_sun.jpg", VK_FORMAT_R8G8B8A8_SRGB);
@@ -133,9 +136,49 @@ bool Renderer::initialize(SDL_Window* _window)
     std::shared_ptr<DeviceTexture> specularTexture = std::make_shared<DeviceTexture>(_ctx, "textures/EarthSpec.png", VK_FORMAT_R8G8B8A8_UNORM);
     std::shared_ptr<DeviceTexture> overlayTexture = std::make_shared<DeviceTexture>(_ctx, "textures/8k_earth_clouds.jpg", VK_FORMAT_R8G8B8A8_SRGB);
     glm::mat4 earthModelMat = glm::mat4(1.f);
-    earthModelMat = glm::translate(glm::mat4(1.f), glm::vec3(-6.f, -6.f, 0.f));
+    earthModelMat = glm::translate(glm::mat4(1.f), glm::vec3(-19.f, 0.f, 0.f));
     earthModelMat = glm::scale(earthModelMat, glm::vec3(1.f));
     _models.push_back(std::make_unique<DeviceModel>(_ctx, sphereDMesh, earthModelMat, colorTexture, unlitTexture, normalTexture, specularTexture, overlayTexture));
+
+    // Moon
+    std::shared_ptr<DeviceTexture> moonColorTexture = std::make_shared<DeviceTexture>(_ctx, "textures/2k_moon.jpg", VK_FORMAT_R8G8B8A8_SRGB);
+    glm::mat4 moonModelMat = glm::mat4(1.f);
+    moonModelMat = glm::translate(glm::mat4(1.f), glm::vec3(-19.f, 6.f, 0.f));
+    moonModelMat = glm::scale(moonModelMat, glm::vec3(0.5f));
+    _models.push_back(std::make_unique<DeviceModel>(_ctx, sphereDMesh, moonModelMat, moonColorTexture));
+
+    // Mars
+    std::shared_ptr<DeviceTexture> marsColorTexture = std::make_shared<DeviceTexture>(_ctx, "textures/8k_mars.jpg", VK_FORMAT_R8G8B8A8_SRGB);
+    glm::mat4 marsModelMat = glm::mat4(1.f);
+    marsModelMat = glm::translate(glm::mat4(1.f), glm::vec3(-26.f, 0.f, 0.f));
+    marsModelMat = glm::scale(marsModelMat, glm::vec3(0.8f));
+    _models.push_back(std::make_unique<DeviceModel>(_ctx, sphereDMesh, marsModelMat, marsColorTexture));
+
+    // Saturn
+    std::shared_ptr<DeviceTexture> saturnColorTexture = std::make_shared<DeviceTexture>(_ctx, "textures/8k_saturn.jpg", VK_FORMAT_R8G8B8A8_SRGB);
+    glm::mat4 saturnModelMat = glm::mat4(1.f);
+    saturnModelMat = glm::translate(glm::mat4(1.f), glm::vec3(-36.f, 0.f, 0.f));
+    saturnModelMat = glm::scale(saturnModelMat, glm::vec3(1.5f));
+    _models.push_back(std::make_unique<DeviceModel>(_ctx, sphereDMesh, saturnModelMat, saturnColorTexture));
+
+    // Saturn Ring
+    std::shared_ptr<DeviceTexture> ringTexture = std::make_shared<DeviceTexture>(_ctx, "textures/8k_saturn_ring_alpha.png", VK_FORMAT_R8G8B8A8_SRGB);
+    glm::mat4 ringModelMat = glm::mat4(1.f);
+    ringModelMat = glm::translate(glm::mat4(1.f), glm::vec3(-36.f, 0.f, 0.f));
+    ringModelMat = glm::scale(ringModelMat, glm::vec3(1.5f));
+    ringModelMat = glm::rotate(ringModelMat, glm::radians(107.f), glm::vec3(1.f, 0.f, 0.f));
+    _models.push_back(std::make_unique<DeviceModel>(_ctx, ringDMesh, ringModelMat, ringTexture));
+    _models[6]->material.ambientStrength = 0.3f;
+    _models[6]->updateMaterial();
+
+
+    // Neptune
+    std::shared_ptr<DeviceTexture> neptuneColorTexture = std::make_shared<DeviceTexture>(_ctx, "textures/2k_neptune.jpg", VK_FORMAT_R8G8B8A8_SRGB);
+    glm::mat4 neptuneModelMat = glm::mat4(1.f);
+    neptuneModelMat = glm::translate(glm::mat4(1.f), glm::vec3(-46.f, 0.f, 0.f));
+    neptuneModelMat = glm::scale(neptuneModelMat, glm::vec3(1.f));
+    _models.push_back(std::make_unique<DeviceModel>(_ctx, sphereDMesh, neptuneModelMat, neptuneColorTexture));
+
 
 
     //Mesh mesh = ObjLoader::load("models/viking_room.obj");
@@ -974,8 +1017,14 @@ bool Renderer::createGraphicsPipeline() {
     // 7- Color blending state
     // This is where we specify the color blending settings (e.g., blend enable, blend factors, etc.)
     VkPipelineColorBlendAttachmentState colorBlendAttachment{};
+    colorBlendAttachment.blendEnable = VK_TRUE;
     colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
-    colorBlendAttachment.blendEnable = VK_FALSE;
+    colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+    colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+    colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD;
+    colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+    colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+    colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD;
 
     VkPipelineColorBlendStateCreateInfo colorBlending{};
     colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
@@ -1116,9 +1165,9 @@ void Renderer::updateUniformBuffer(uint32_t currentImage) {
     memcpy(_uniformBuffersMapped[currentImage], &mvp, sizeof(mvp)); // Copy the MVP data to the mapped memory (Upload to GPU)
 
     // Update Scene Info
-    SceneInfo si{};
-    si.time = time;
-    _sceneInfoUBOs[currentImage]->update(si);
+    _sceneInfo.time = time;
+    _sceneInfo.cameraPosition = _camera->getPosition();
+    _sceneInfoUBOs[currentImage]->update(_sceneInfo);
 }
 
 

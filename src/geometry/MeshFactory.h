@@ -5,5 +5,5 @@
 namespace MeshFactory {
 
     HostMesh createSphereMesh(float radius, int segments, int rings, bool skySphere = false);
-
+    HostMesh createAnnulusMesh(float innerRadius, float outerRadius, int segments);
 } 

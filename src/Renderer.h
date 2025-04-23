@@ -4,7 +4,7 @@
 #include "GeometryHelper.h"
 #include "geometry/Vertex.h"
 #include "geometry/HostMesh.h"
-#include "TurnTableCamera.h"
+#include "Camera.h"
 #include "DeviceModel.h"
 #include "TextureSampler.h"
 
@@ -17,14 +17,17 @@ private:
 
     std::shared_ptr<VulkanContext> _ctx;
 
-    std::unique_ptr<TurnTableCamera> _camera = nullptr;
+    std::unique_ptr<Camera> _camera = nullptr;
     std::unique_ptr<DeviceTexture> _dummyTexture;
 
     std::unique_ptr<TextureSampler> _textureSampler;
 
+    // Global information that we need to pass to the shader
     struct SceneInfo {
         alignas(4) float time;
-    };
+        alignas(16) glm::vec3 cameraPosition;
+        alignas(16) glm::vec3 lightColor;
+    } _sceneInfo;
     std::array<std::unique_ptr<UniformBuffer<SceneInfo>>, MAX_FRAMES_IN_FLIGHT> _sceneInfoUBOs;
     
     std::vector<std::unique_ptr<DeviceModel>> _models;
@@ -142,5 +145,5 @@ public:
     void drawFrame();
     void informFramebufferResized() { _framebufferResized = true; };
 
-    TurnTableCamera* getCamera() { return _camera.get(); };
+    Camera* getCamera() { return _camera.get(); };
 };

@@ -27,6 +27,9 @@ public:
     Window();
     ~Window();
 
+    Window(const Window&) = delete;
+    Window& operator=(const Window&) = delete;
+
     bool initialize(const std::string& title, const uint16_t width, const uint16_t height);
     void startRenderingLoop();
 };

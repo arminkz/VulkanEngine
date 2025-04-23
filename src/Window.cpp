@@ -48,7 +48,7 @@ bool Window::initialize(const std::string& title, const uint16_t width, const ui
     
 
     // Always on top
-    SDL_SetWindowAlwaysOnTop(_window, true);
+    //SDL_SetWindowAlwaysOnTop(_window, true);
     
     // Event Handling
     SDL_AddEventWatch(eventCallback, this); // Add the event callback
@@ -132,8 +132,8 @@ void Window::onMouseMotion(int x, int y)
         int deltaY = y - _lastMouseY;
 
         // Update camera based on mouse movement
-        _renderer->getCamera()->changeTheta(static_cast<float>(-deltaX) * 0.01f); // Example function to change camera theta
-        _renderer->getCamera()->changePhi(static_cast<float>(-deltaY) * 0.01f);   // Example function to change camera phi
+        _renderer->getCamera()->rotateHorizontally(static_cast<float>(deltaX) * 0.005f);
+        _renderer->getCamera()->rotateVertically(static_cast<float>(deltaY) * 0.005f);
     }
 
     _lastMouseX = x;
@@ -159,5 +159,5 @@ void Window::onMouseButtonUp(int button, int x, int y)
 void Window::onMouseWheel(int x, int y)
 {
     // Handle mouse wheel event
-    _renderer->getCamera()->changeRadius(static_cast<float>(y) * 0.5f); // Example function to change camera radius based on mouse wheel
+    _renderer->getCamera()->changeZoom(static_cast<float>(y) * 0.5f); // Example function to change camera radius based on mouse wheel
 }

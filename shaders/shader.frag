@@ -16,6 +16,8 @@ layout(binding = 1) uniform materialUBO {
 
 layout(binding = 2) uniform sceneInfoUBO {
     float time;
+    vec3 cameraPosition;
+    vec3 lightColor;
 } sceneInfo;
 
 layout(binding = 3) uniform sampler2D baseColorTexture;
@@ -24,7 +26,7 @@ layout(binding = 5) uniform sampler2D normalMapTexture;
 layout(binding = 6) uniform sampler2D specularTexture;
 layout(binding = 7) uniform sampler2D overlayColorTexture;
 
-layout(location = 0) in vec3 fragColor;
+layout(location = 0) in vec4 fragColor;
 layout(location = 1) in vec2 fragTexCoord;
 layout(location = 2) in vec4 worldPosition;
 layout(location = 3) in vec3 worldNormal;
@@ -55,25 +57,41 @@ void main() {
     mat3 world_to_TBN = transpose(TBN_to_world); // Because its an orthonormal matrix, its inverse is just transpose.
 
     vec3 lightPosition = vec3(0.0, 0.0, 0.0);
-    vec3 lightDir = normalize(lightPosition - worldPosition.xyz);
+    vec3 lightDir = normalize(lightPosition - worldPosition.xyz); // Point light
+    vec3 lightDirTBN = world_to_TBN * lightDir;
 
     vec3 normalTBN = vec3(0.0, 0.0, 1.0);
     if (material.hasNormalMapTexture == 1) {
         normalTBN = texture(normalMapTexture, fragTexCoord).rgb * 2.0 - 1.0;
     }
-    vec3 lightDirTBN = world_to_TBN * lightDir;
     float diffuseDot = dot(normalTBN, lightDirTBN);
     
-    vec3 color = fragColor;
+    vec4 color = fragColor;
     if (material.hasBaseColorTexture == 1) {
-        vec3 baseColor = texture(baseColorTexture, fragTexCoord).rgb;
+        vec4 baseColor = texture(baseColorTexture, fragTexCoord);
         color = baseColor;
 
         if(material.hasUnlitColorTexture == 1) {
-            vec3 unlitColor = texture(unlitColorTexture, fragTexCoord).rgb;
-            color = mix(unlitColor, baseColor, smoothstep(-0.2, -0.09, diffuseDot));
+            vec4 unlitColor = texture(unlitColorTexture, fragTexCoord);
+            unlitColor.rgb *= 5.f;
+            color = mix(unlitColor, baseColor, smoothstep(-0.1, 0.01, diffuseDot));
         }
     }
+
+    vec3 viewDir = normalize(sceneInfo.cameraPosition - worldPosition.xyz);
+    vec3 viewDirTBN = world_to_TBN * viewDir;
+    vec3 reflectDirTBN = reflect(-lightDirTBN, normalTBN);
+
+    vec3 ambient = material.ambientStrength * sceneInfo.lightColor;
+    vec3 diffuse = max(diffuseDot, 0.0) * sceneInfo.lightColor;
+    vec3 specular = vec3(0.,0.,0.);
+
+    vec3 specularStrength = material.specularStrength * vec3(1.);
+    if(material.hasSpecularTexture == 1) {
+        specularStrength *= texture(specularTexture, fragTexCoord).rgb;
+    }
+    specular = specularStrength * pow(max(dot(viewDirTBN, reflectDirTBN), 0.0), 8) * sceneInfo.lightColor;
+    color = vec4(ambient + diffuse + specular, 1.0) * color;
 
     if (material.sunShadeMode == 1) {
         // Distort UV coordinates for turbulence
@@ -88,9 +106,9 @@ void main() {
         vec3 baseColor = texture(baseColorTexture, uv + turbulence * 0.01).rgb;
 
         // Boost color to simulate brightness
-        color = baseColor; //* vec3(1.5, 1.2, 0.9); // warm tone
+        color = vec4(baseColor,1.0); //* vec3(1.5, 1.2, 0.9); // warm tone
     }
 
-    outColor = vec4(color, 1.0);
+    outColor = color;
 }
 

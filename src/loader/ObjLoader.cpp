@@ -39,7 +39,7 @@ namespace ObjLoader {
                     1.0f - attrib.texcoords[2 * index.texcoord_index + 1]
                 };
 
-                vertex.color = { 1.0f, 1.0f, 1.0f }; // Default color (white)
+                vertex.color = { 1.0f, 1.0f, 1.0f, 1.0f }; // Default color (white)
 
                 // if the vertex is not already in the map, add it
                 // and assign it a unique index
