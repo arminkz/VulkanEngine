@@ -124,7 +124,7 @@ void Window::onWindowResized(int width, int height)
     _renderer->informFramebufferResized();
 }
 
-void Window::onMouseMotion(int x, int y)
+void Window::onMouseMotion(float x, float y)
 {
     // Handle mouse motion event
     if (_isMouseDown) {
@@ -140,7 +140,7 @@ void Window::onMouseMotion(int x, int y)
     _lastMouseY = y;
 }
 
-void Window::onMouseButtonDown(int button, int x, int y)
+void Window::onMouseButtonDown(int button, float x, float y)
 {
     // Handle mouse button down event
     if (button == SDL_BUTTON_LEFT) {
@@ -148,7 +148,7 @@ void Window::onMouseButtonDown(int button, int x, int y)
     }
 }
 
-void Window::onMouseButtonUp(int button, int x, int y)
+void Window::onMouseButtonUp(int button, float x, float y)
 {
     // Handle mouse button up event
     if (button == SDL_BUTTON_LEFT) {
@@ -156,7 +156,7 @@ void Window::onMouseButtonUp(int button, int x, int y)
     }
 }
 
-void Window::onMouseWheel(int x, int y)
+void Window::onMouseWheel(float x, float y)
 {
     // Handle mouse wheel event
     _renderer->getCamera()->changeZoom(static_cast<float>(y) * 0.5f); // Example function to change camera radius based on mouse wheel

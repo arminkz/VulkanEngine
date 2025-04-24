@@ -13,10 +13,10 @@ protected:
 
     // Event handlers
     void onWindowResized(int width, int height);
-    void onMouseMotion(int x, int y);
-    void onMouseButtonDown(int button, int x, int y);
-    void onMouseButtonUp(int button, int x, int y);
-    void onMouseWheel(int x, int y);
+    void onMouseMotion(float x, float y);
+    void onMouseButtonDown(int button, float x, float y);
+    void onMouseButtonUp(int button, float x, float y);
+    void onMouseWheel(float x, float y);
 
 private:
     bool _isMouseDown = false;
