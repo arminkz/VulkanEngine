@@ -5,6 +5,7 @@
 #include "geometry/Vertex.h"
 #include "geometry/HostMesh.h"
 #include "Camera.h"
+#include "Pipeline.h"
 #include "DeviceModel.h"
 #include "TextureSampler.h"
 
@@ -48,8 +49,9 @@ private:
     //std::vector<VkDescriptorSet> _descriptorSets;
     std::vector<std::vector<VkDescriptorSet>> _descriptorSets;  //_descriptorSets[ModelIndex][FrameIndex]
     
-    VkPipelineLayout _pipelineLayout;
-    VkPipeline _graphicsPipeline;
+    //VkPipelineLayout _pipelineLayout;
+    //VkPipeline _graphicsPipeline;
+    std::unique_ptr<Pipeline> _pipeline;
 
     std::vector<VkBuffer> _uniformBuffers;
     std::vector<VkDeviceMemory> _uniformBuffersMemory;
@@ -114,7 +116,7 @@ private:
     bool createDescriptorPool();
     bool createDescriptorSets();
 
-    bool createGraphicsPipeline();
+    // bool createGraphicsPipeline();
 
     bool createFramebuffers();
     
