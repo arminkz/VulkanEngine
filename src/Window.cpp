@@ -158,5 +158,5 @@ void Window::onMouseButtonUp(int button, float x, float y)
 void Window::onMouseWheel(float x, float y)
 {
     // Handle mouse wheel event
-    _renderer->getCamera()->changeZoom(static_cast<float>(y) * 0.5f); // Example function to change camera radius based on mouse wheel
+    _renderer->getCamera()->changeZoom(static_cast<float>(y)); // Example function to change camera radius based on mouse wheel
 }

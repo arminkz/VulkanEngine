@@ -34,8 +34,6 @@ void DescriptorSet::createDescriptorSetLayout(const std::vector<Descriptor>& des
 
     if (vkCreateDescriptorSetLayout(_ctx->device, &layoutInfo, nullptr, &_descriptorSetLayout) != VK_SUCCESS) {
         throw std::runtime_error("Failed to create descriptor set layout!");
-    } else {
-        spdlog::info("Descriptor set layout created successfully");
     }
 }
 
@@ -50,10 +48,7 @@ void DescriptorSet::createDescriptorSet(const std::vector<Descriptor>& descripto
 
     if (vkAllocateDescriptorSets(_ctx->device, &allocInfo, &_descriptorSet) != VK_SUCCESS) {
         throw std::runtime_error("Failed to allocate descriptor set!");
-    } else {
-        spdlog::info("Descriptor set allocated successfully");
     }
-
     std::vector<VkWriteDescriptorSet> descriptorWrites;
     descriptorWrites.reserve(descriptors.size());
 

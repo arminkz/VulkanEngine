@@ -63,7 +63,7 @@ file(GLOB SHADER_FILES spv/*.spv)
 foreach(SHADER_FILE ${SHADER_FILES})
     get_filename_component(SHADER_NAME ${SHADER_FILE} NAME)
     add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy ${SHADER_FILE} $<TARGET_FILE_DIR:${PROJECT_NAME}>/shaders/${SHADER_NAME}
+        COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/spv $<TARGET_FILE_DIR:${PROJECT_NAME}>/spv
         COMMAND ${CMAKE_COMMAND} -E echo "Copying shader file: ${SHADER_NAME}"
     )
 endforeach()

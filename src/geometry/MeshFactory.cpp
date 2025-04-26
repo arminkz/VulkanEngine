@@ -138,4 +138,61 @@ namespace MeshFactory {
         return mesh;
     }
 
+    HostMesh createQuadMesh(float width, float height, bool twoSided)
+    {
+        HostMesh mesh;
+
+        Vertex v0;
+        v0.pos = { -width / 2, 0.0f, -height / 2 };
+        v0.color = { 1.0f, 1.0f, 1.0f, 1.0f };
+        v0.texCoord = { 0.0f, 0.0f };
+        v0.normal = { 0.0f, 1.0f, 0.0f };
+        v0.tangent = { 1.0f, 0.0f, 0.0f };
+
+        Vertex v1;
+        v1.pos = { width / 2, 0.0f, -height / 2 };
+        v1.color = { 1.0f, 1.0f, 1.0f, 1.0f };
+        v1.texCoord = { 1.0f, 0.0f };
+        v1.normal = { 0.0f, 1.0f, 0.0f };
+        v1.tangent = { 1.0f, 0.0f, 0.0f };
+
+        Vertex v2;
+        v2.pos = { width / 2, 0.0f, height / 2 };
+        v2.color = { 1.0f, 1.0f, 1.0f, 1.0f };
+        v2.texCoord = { 1.0f, 1.0f };
+        v2.normal = { 0.0f, 1.0f, 0.0f };
+        v2.tangent = { 1.0f, 0.0f, 0.0f };
+
+        Vertex v3;
+        v3.pos = { -width / 2, 0.0f, height / 2 };
+        v3.color = { 1.0f, 1.0f, 1.0f, 1.0f };
+        v3.texCoord = { 0.0f, 1.0f };
+        v3.normal = { 0.0f, 1.0f, 0.0f };
+        v3.tangent = { 1.0f, 0.0f, 0.0f };
+
+        mesh.vertices.push_back(v0);
+        mesh.vertices.push_back(v1);
+        mesh.vertices.push_back(v2);
+        mesh.vertices.push_back(v3);
+
+        mesh.indices.push_back(0);
+        mesh.indices.push_back(1);
+        mesh.indices.push_back(2);
+
+        mesh.indices.push_back(0);
+        mesh.indices.push_back(2);
+        mesh.indices.push_back(3);
+
+        if(twoSided) {
+            mesh.indices.push_back(0);
+            mesh.indices.push_back(2);
+            mesh.indices.push_back(1);
+    
+            mesh.indices.push_back(0);
+            mesh.indices.push_back(3);
+            mesh.indices.push_back(2);
+        }
+
+        return mesh;
+    }
 }

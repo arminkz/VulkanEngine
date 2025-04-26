@@ -9,7 +9,7 @@ public:
     {
         float radius = 16.0f;
         float minRadius = 0.1f;  
-        float maxRadius = 100.0f; 
+        float maxRadius = 300.0f; 
 
         glm::vec3 target = glm::vec3(0.);
 

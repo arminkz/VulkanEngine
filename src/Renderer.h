@@ -37,7 +37,8 @@ private:
     
 
 
-    std::vector<std::unique_ptr<DeviceModel>> _models;
+    std::vector<std::unique_ptr<DeviceModel>> _planetModels;
+    std::vector<std::unique_ptr<DeviceModel>> _orbitModels;
 
     
     VkSwapchainKHR _swapChain = nullptr;
