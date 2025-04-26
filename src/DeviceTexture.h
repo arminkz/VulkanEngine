@@ -18,6 +18,9 @@ public:
 
     VkDescriptorImageInfo getDescriptorInfo(VkSampler sampler) const;
 
+    // Singleton pattern for dummy texture
+    static DeviceTexture* getDummy(std::shared_ptr<VulkanContext> ctx);
+
 private:
     std::shared_ptr<VulkanContext> _ctx;
 

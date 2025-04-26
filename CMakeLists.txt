@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.10)
 project(VulkanEngine)
 
-# Set the C++ standard to C++17 windows and linux
+# Set the C++ standard to C++17
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -42,6 +42,11 @@ file(GLOB SOURCES
     src/loader/*
     src/utilities/*
 )
+
+# Add resources.rc file to the sources if on Windows
+if (WIN32)
+    list(APPEND SOURCES resources.rc)
+endif()
 
 # Handle .h files
 set(INCLUDES ${INCLUDES} src)

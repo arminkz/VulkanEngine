@@ -4,7 +4,7 @@ layout(push_constant) uniform PushConstants {
     mat4 model;
 } pc;
 
-layout(binding = 0) uniform MVP { // Model-View-Projection matrix
+layout(set = 0, binding = 0) uniform MVP { // Model-View-Projection matrix (Set 0 is per-frame descriptor set)
     mat4 model;
     mat4 view;
     mat4 proj;
@@ -31,5 +31,4 @@ void main() {
     gl_Position = mvp.proj * mvp.view * worldPosition;
     fragColor = inColor;
     fragTexCoord = inTexCoord;
-
 }

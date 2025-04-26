@@ -1,27 +1,24 @@
 #pragma once
 #include "stdafx.h"
 #include "VulkanHelper.h"
-#include "GeometryHelper.h"
 #include "geometry/Vertex.h"
 #include "geometry/HostMesh.h"
 #include "Camera.h"
 #include "Pipeline.h"
 #include "DeviceModel.h"
 #include "TextureSampler.h"
+#include "DescriptorSet.h"
 
 const int MAX_FRAMES_IN_FLIGHT = 2;
 
 class Renderer {
 
 private:
-    SDL_Window* _window = nullptr;
-
     std::shared_ptr<VulkanContext> _ctx;
 
     std::unique_ptr<Camera> _camera = nullptr;
-    std::unique_ptr<DeviceTexture> _dummyTexture;
 
-    std::unique_ptr<TextureSampler> _textureSampler;
+    std::shared_ptr<TextureSampler> _textureSampler;
 
     // Global information that we need to pass to the shader
     struct SceneInfo {
@@ -30,7 +27,16 @@ private:
         alignas(16) glm::vec3 lightColor;
     } _sceneInfo;
     std::array<std::unique_ptr<UniformBuffer<SceneInfo>>, MAX_FRAMES_IN_FLIGHT> _sceneInfoUBOs;
+
+    struct MVP {
+        alignas(16) glm::mat4 model;
+        alignas(16) glm::mat4 view;
+        alignas(16) glm::mat4 projection;
+    };
+    std::array<std::unique_ptr<UniformBuffer<MVP>>, MAX_FRAMES_IN_FLIGHT> _mvpUBOs;
     
+
+
     std::vector<std::unique_ptr<DeviceModel>> _models;
 
     
@@ -43,19 +49,16 @@ private:
 
     VkRenderPass _renderPass;
 
-    VkDescriptorSetLayout _descriptorSetLayout;
-    VkDescriptorPool _descriptorPool;
+    //VkDescriptorSetLayout _descriptorSetLayout;
+    //VkDescriptorPool _descriptorPool;
 
     //std::vector<VkDescriptorSet> _descriptorSets;
-    std::vector<std::vector<VkDescriptorSet>> _descriptorSets;  //_descriptorSets[ModelIndex][FrameIndex]
+    //std::vector<std::vector<VkDescriptorSet>> _descriptorSets;  //_descriptorSets[ModelIndex][FrameIndex]
     
-    //VkPipelineLayout _pipelineLayout;
-    //VkPipeline _graphicsPipeline;
     std::unique_ptr<Pipeline> _pipeline;
+    std::array<std::unique_ptr<DescriptorSet>, MAX_FRAMES_IN_FLIGHT> _descriptorSets;
 
-    std::vector<VkBuffer> _uniformBuffers;
-    std::vector<VkDeviceMemory> _uniformBuffersMemory;
-    std::vector<void*> _uniformBuffersMapped;
+    std::unique_ptr<Pipeline> _orbitPipeline;
 
     VkSampleCountFlagBits _msaaSamples = VK_SAMPLE_COUNT_1_BIT;
     VkImage _colorImage;
@@ -66,7 +69,6 @@ private:
     VkDeviceMemory _depthImageMemory;
     VkImageView _depthImageView;
 
-    //VkCommandPool _commandPool;
     std::vector<VkCommandBuffer> _commandBuffers;
 
     std::vector<VkSemaphore> _imageAvailableSemaphores;
@@ -76,32 +78,6 @@ private:
     uint32_t _currentFrame = 0;
     bool _framebufferResized = false;
 
-    bool _validationLayersAvailable = true;
-
-    // Debug messenger for validation layers
-    void setupDebugMessenger();
-    VkDebugUtilsMessengerEXT debugMessenger;
-    static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
-        VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
-        VkDebugUtilsMessageTypeFlagsEXT messageType,
-        const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
-        void* pUserData);
-    
-
-    void createVulkanContext();
-    //-------------------------
-    bool createVulkanInstance();
-    bool createSurface();
-    bool pickPhysicalDevice();
-    bool createLogicalDevice();
-    bool createCommandPool();
-    //-------------------------
-
-
-    bool isDeviceSuitable(VkPhysicalDevice device);
-    
-    QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device);
-    SwapChainSupportDetails querySwapChainSupport(VkPhysicalDevice device);
     VkSurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats);
     VkPresentModeKHR chooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes);
     VkExtent2D chooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities);
@@ -109,14 +85,12 @@ private:
     bool recreateSwapChain();
     void cleanupSwapChain();
 
-    VkShaderModule createShaderModule(const std::vector<char>& code);
     bool createRenderPass();
 
-    bool createDescriptorSetLayout();
-    bool createDescriptorPool();
-    bool createDescriptorSets();
 
-    // bool createGraphicsPipeline();
+    //VkDescriptorSetLayoutBinding descriptorBinding(uint32_t binding, VkDescriptorType type, VkShaderStageFlags stage, uint32_t count = 1);
+    //void createDescriptorSetLayout(const std::vector<VkDescriptorSetLayoutBinding>& bindings);
+    //bool createDescriptorSets();
 
     bool createFramebuffers();
     
@@ -125,7 +99,6 @@ private:
     VkSampleCountFlagBits getMaxMsaaSampleCount();
     bool hasStencilComponent(VkFormat format);
 
-    bool createUniformBuffers();
     void updateUniformBuffer(uint32_t currentImage);
 
     void createColorResources();
@@ -136,14 +109,11 @@ private:
 
     bool createSyncObjects();
 
-    void printVulkanInfo();
-    void printSwapChainSupportDetails(const SwapChainSupportDetails& details);
-
 public:
-    Renderer();
+    Renderer(std::shared_ptr<VulkanContext> ctx);
     ~Renderer();
 
-    bool initialize(SDL_Window* window);
+    bool initialize();
     void drawFrame();
     void informFramebufferResized() { _framebufferResized = true; };
 

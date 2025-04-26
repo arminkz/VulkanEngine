@@ -238,3 +238,13 @@ VkDescriptorImageInfo DeviceTexture::getDescriptorInfo(VkSampler sampler) const
     return textureInfo;
 }
 
+
+DeviceTexture* DeviceTexture::getDummy(std::shared_ptr<VulkanContext> ctx) {
+    static DeviceTexture* dummyTexture = nullptr;
+    if (!dummyTexture) {
+        // Create a dummy texture with a single white pixel
+        uint8_t pixelData[4] = { 255, 255, 255, 255 }; // White pixel
+        dummyTexture = new DeviceTexture(ctx, pixelData, 1, 1, VK_FORMAT_R8G8B8A8_UNORM);
+    }
+    return dummyTexture;
+}

@@ -1,6 +1,12 @@
 #version 450
 
-layout(binding = 1) uniform materialUBO {
+layout(set = 0, binding = 1) uniform sceneInfoUBO { // Scene information (set 0 is per-frame descriptor set)
+    float time;
+    vec3 cameraPosition;
+    vec3 lightColor;
+} sceneInfo;
+
+layout(set = 1, binding = 0) uniform materialUBO {  // Material information (set 1 is per-object descriptor set)
     int hasBaseColorTexture;
     int hasUnlitColorTexture;
     int hasNormalMapTexture;
@@ -14,17 +20,11 @@ layout(binding = 1) uniform materialUBO {
     int sunShadeMode;
 } material;
 
-layout(binding = 2) uniform sceneInfoUBO {
-    float time;
-    vec3 cameraPosition;
-    vec3 lightColor;
-} sceneInfo;
-
-layout(binding = 3) uniform sampler2D baseColorTexture;
-layout(binding = 4) uniform sampler2D unlitColorTexture;
-layout(binding = 5) uniform sampler2D normalMapTexture;
-layout(binding = 6) uniform sampler2D specularTexture;
-layout(binding = 7) uniform sampler2D overlayColorTexture;
+layout(set = 1, binding = 1) uniform sampler2D baseColorTexture;
+layout(set = 1, binding = 2) uniform sampler2D unlitColorTexture;
+layout(set = 1, binding = 3) uniform sampler2D normalMapTexture;
+layout(set = 1, binding = 4) uniform sampler2D specularTexture;
+layout(set = 1, binding = 5) uniform sampler2D overlayColorTexture;
 
 layout(location = 0) in vec4 fragColor;
 layout(location = 1) in vec2 fragTexCoord;
@@ -33,7 +33,6 @@ layout(location = 3) in vec3 worldNormal;
 layout(location = 4) in vec3 worldTangent;
 
 layout(location = 0) out vec4 outColor;
-
 
 const mat2 rot = mat2( 1.6,  1.2, -1.2,  1.6 );
 

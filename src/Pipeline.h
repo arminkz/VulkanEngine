@@ -5,7 +5,7 @@
 
 struct PipelineParams
 {
-    VkDescriptorSetLayout descriptorSetLayout;
+    std::vector<VkDescriptorSetLayout> descriptorSetLayouts;
     VkPushConstantRange pushConstantRange;
     VkRenderPass renderPass;
 

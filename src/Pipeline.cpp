@@ -45,8 +45,8 @@ void Pipeline::createPipelineLayout(const PipelineParams& params)
     // Create the pipeline layout with the descriptor set layout and push constant range
     VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
     pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    pipelineLayoutInfo.setLayoutCount = 1;
-    pipelineLayoutInfo.pSetLayouts = &params.descriptorSetLayout; // Use the descriptor set layout from the params
+    pipelineLayoutInfo.setLayoutCount = params.descriptorSetLayouts.size();
+    pipelineLayoutInfo.pSetLayouts = params.descriptorSetLayouts.data(); // Use the descriptor set layout from the params
     pipelineLayoutInfo.pushConstantRangeCount = 1;
     pipelineLayoutInfo.pPushConstantRanges = &params.pushConstantRange; // Use the push constant range from the params
 

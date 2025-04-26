@@ -12,7 +12,6 @@ Window::~Window()
 {
     // Clean up the renderer
     if (_renderer) {
-        delete _renderer;
         _renderer = nullptr;
     }
 
@@ -38,14 +37,14 @@ bool Window::initialize(const std::string& title, const uint16_t width, const ui
         return false;
     }
 
+    // Create Vulkan context
+    _ctx = std::make_shared<VulkanContext>(_window);
+
     // Create the Vulkan renderer
-    _renderer = new Renderer();
-    if (!_renderer->initialize(_window)) {
+    _renderer = std::make_unique<Renderer>(_ctx);
+    if (!_renderer->initialize()) {
         return false;
     }
-
-    // Set the window icon
-    
 
     // Always on top
     //SDL_SetWindowAlwaysOnTop(_window, true);

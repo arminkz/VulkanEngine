@@ -7,7 +7,8 @@ class Window
 
 protected:
     SDL_Window* _window = nullptr;
-    Renderer* _renderer = nullptr;
+    std::shared_ptr<VulkanContext> _ctx = nullptr;
+    std::unique_ptr<Renderer> _renderer = nullptr;
 
     static bool eventCallback(void *userdata, SDL_Event *event);
 

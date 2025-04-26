@@ -2,8 +2,10 @@
 #include "stdafx.h"
 #include "geometry/DeviceMesh.h"
 #include "DeviceTexture.h"
+#include "TextureSampler.h"
 #include "VulkanContext.h"
 #include "UniformBuffer.h"
+#include "DescriptorSet.h"
 
 // Model on GPU
 class DeviceModel
@@ -20,11 +22,12 @@ public:
         std::shared_ptr<VulkanContext> ctx, 
         std::shared_ptr<DeviceMesh> mesh,
         glm::mat4 modelMatrix,
-        std::shared_ptr<DeviceTexture> baseColorTexture = nullptr,
-        std::shared_ptr<DeviceTexture> unlitColorTexture = nullptr,
-        std::shared_ptr<DeviceTexture> normalMapTexture = nullptr,
-        std::shared_ptr<DeviceTexture> specularTexture = nullptr,
-        std::shared_ptr<DeviceTexture> overlayColorTexture = nullptr
+        std::shared_ptr<DeviceTexture> baseColorTexture,
+        std::shared_ptr<DeviceTexture> unlitColorTexture,
+        std::shared_ptr<DeviceTexture> normalMapTexture,
+        std::shared_ptr<DeviceTexture> specularTexture,
+        std::shared_ptr<DeviceTexture> overlayColorTexture,
+        std::shared_ptr<TextureSampler> textureSampler
     );
     
     ~DeviceModel();
@@ -57,6 +60,8 @@ public:
     const UniformBuffer<Material>* getMaterialUBO() const { return _materialUBO.get(); }
     void updateMaterial() { _materialUBO->update(material); }
 
+    const DescriptorSet* getDescriptorSet() const { return _descriptorSet.get(); }
+
 private:
     std::shared_ptr<VulkanContext> _ctx;
     
@@ -68,9 +73,12 @@ private:
     std::shared_ptr<DeviceTexture> _specularTexture;
     std::shared_ptr<DeviceTexture> _overlayColorTexture;
 
+    std::shared_ptr<TextureSampler> _textureSampler;
+
     glm::vec3 _color;
     glm::mat4 _modelMatrix;
 
     std::unique_ptr<UniformBuffer<Material>> _materialUBO;
-    
+    std::unique_ptr<DescriptorSet> _descriptorSet;
+
 };
