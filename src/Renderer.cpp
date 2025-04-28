@@ -154,7 +154,7 @@ bool Renderer::initialize()
     // Earth Atmosphere
     glm::mat4 earthAtmosphereModelMat = glm::mat4(1.f);
     earthAtmosphereModelMat = glm::translate(earthAtmosphereModelMat, glm::vec3(orbitRadEarth, 0.f, 0.f));
-    earthAtmosphereModelMat = glm::scale(earthAtmosphereModelMat, glm::vec3(sizeEarth * 1.05f));
+    earthAtmosphereModelMat = glm::scale(earthAtmosphereModelMat, glm::vec3(sizeEarth * 1.015f));
     _atmosphereModels.push_back(std::make_unique<AtmosphereModel>(_ctx, sphereDMesh, earthAtmosphereModelMat, glm::vec3(0.45f, 0.55f, 1.f)));
 
 

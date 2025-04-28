@@ -41,7 +41,8 @@ layout(location = 1) in vec2 fragTexCoord;
 layout(location = 2) in vec4 worldPosition;
 layout(location = 3) in vec3 worldNormal;
 layout(location = 4) in vec3 worldTangent;
-layout(location = 5) in vec3 worldViewNormal;
+layout(location = 5) in vec3 worldViewPosition;
+layout(location = 6) in vec3 worldViewNormal;
 
 layout(location = 0) out vec4 outColor;
 
