@@ -10,6 +10,8 @@ struct PipelineParams
     VkRenderPass renderPass;
 
     VkSampleCountFlagBits msaaSamples = VK_SAMPLE_COUNT_1_BIT;
+    bool depthTest = true;
+    bool depthWrite = true;
 };
 
 class Pipeline

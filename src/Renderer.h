@@ -6,6 +6,7 @@
 #include "Camera.h"
 #include "Pipeline.h"
 #include "DeviceModel.h"
+#include "AtmosphereModel.h"
 #include "TextureSampler.h"
 #include "DescriptorSet.h"
 
@@ -22,25 +23,34 @@ private:
 
     // Global information that we need to pass to the shader
     struct SceneInfo {
+        alignas(16) glm::mat4 view;
+        alignas(16) glm::mat4 projection;
+
         alignas(4) float time;
         alignas(16) glm::vec3 cameraPosition;
         alignas(16) glm::vec3 lightColor;
     } _sceneInfo;
+
     std::array<std::unique_ptr<UniformBuffer<SceneInfo>>, MAX_FRAMES_IN_FLIGHT> _sceneInfoUBOs;
+    std::array<std::unique_ptr<DescriptorSet>, MAX_FRAMES_IN_FLIGHT> _sceneDescriptorSets;
 
-    struct MVP {
+
+    struct PushConstants {
         alignas(16) glm::mat4 model;
-        alignas(16) glm::mat4 view;
-        alignas(16) glm::mat4 projection;
-    };
-    std::array<std::unique_ptr<UniformBuffer<MVP>>, MAX_FRAMES_IN_FLIGHT> _mvpUBOs;
-    
-
+    } _pushConstants;
 
     std::vector<std::unique_ptr<DeviceModel>> _planetModels;
     std::vector<std::unique_ptr<DeviceModel>> _orbitModels;
+    std::vector<std::unique_ptr<AtmosphereModel>> _atmosphereModels;
 
-    
+    std::unique_ptr<Pipeline> _pipeline;
+    std::unique_ptr<Pipeline> _orbitPipeline;
+    std::unique_ptr<Pipeline> _atmospherePipeline;
+
+
+
+
+
     VkSwapchainKHR _swapChain = nullptr;
     VkFormat _swapChainImageFormat;
     VkExtent2D _swapChainExtent;
@@ -50,16 +60,6 @@ private:
 
     VkRenderPass _renderPass;
 
-    //VkDescriptorSetLayout _descriptorSetLayout;
-    //VkDescriptorPool _descriptorPool;
-
-    //std::vector<VkDescriptorSet> _descriptorSets;
-    //std::vector<std::vector<VkDescriptorSet>> _descriptorSets;  //_descriptorSets[ModelIndex][FrameIndex]
-    
-    std::unique_ptr<Pipeline> _pipeline;
-    std::array<std::unique_ptr<DescriptorSet>, MAX_FRAMES_IN_FLIGHT> _descriptorSets;
-
-    std::unique_ptr<Pipeline> _orbitPipeline;
 
     VkSampleCountFlagBits _msaaSamples = VK_SAMPLE_COUNT_1_BIT;
     VkImage _colorImage;
@@ -87,11 +87,6 @@ private:
     void cleanupSwapChain();
 
     bool createRenderPass();
-
-
-    //VkDescriptorSetLayoutBinding descriptorBinding(uint32_t binding, VkDescriptorType type, VkShaderStageFlags stage, uint32_t count = 1);
-    //void createDescriptorSetLayout(const std::vector<VkDescriptorSetLayoutBinding>& bindings);
-    //bool createDescriptorSets();
 
     bool createFramebuffers();
     

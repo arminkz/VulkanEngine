@@ -135,8 +135,8 @@ void Pipeline::createGraphicsPipeline(const std::string& vertShaderPath, const s
     // This is where we specify the depth and stencil settings (e.g., depth test, depth write, etc.)
     VkPipelineDepthStencilStateCreateInfo depthStencil{};
     depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-    depthStencil.depthTestEnable = VK_TRUE;
-    depthStencil.depthWriteEnable = VK_TRUE;
+    depthStencil.depthTestEnable = params.depthTest ? VK_TRUE : VK_FALSE;
+    depthStencil.depthWriteEnable = params.depthWrite ? VK_TRUE : VK_FALSE;
     depthStencil.depthCompareOp = VK_COMPARE_OP_LESS; // Lower depth = closer to camera
     depthStencil.depthBoundsTestEnable = VK_FALSE;
     depthStencil.minDepthBounds = 0.0f; // Optional

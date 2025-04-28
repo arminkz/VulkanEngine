@@ -30,7 +30,6 @@ Renderer::~Renderer()
     _textureSampler = nullptr;
 
     for(int i=0;i<MAX_FRAMES_IN_FLIGHT; i++) {
-        _mvpUBOs[i] = nullptr;
         _sceneInfoUBOs[i] = nullptr;
     }
 
@@ -61,24 +60,23 @@ bool Renderer::initialize()
 {
     // Create Camera
     Camera::CameraParams cp{};
-    cp.target = glm::vec3(30.f, 0.f, 0.f);
+    cp.target = glm::vec3(20.f, 0.f, 0.f);
     _camera = std::make_unique<Camera>(cp);
 
     // Create Texture Sampler
     _textureSampler = std::make_unique<TextureSampler>(_ctx, 10);
 
-    // MVP UBO (Per Frame)
-    for(int i=0; i<MAX_FRAMES_IN_FLIGHT; i++) {
-        _mvpUBOs[i] = std::make_unique<UniformBuffer<MVP>>(_ctx, 0, VK_SHADER_STAGE_VERTEX_BIT);
-        _mvpUBOs[i]->update({ glm::mat4(1.f), glm::mat4(1.f), glm::mat4(1.f) });
-    }
 
     // Scene UBO (Per Frame)
+    _sceneInfo.view = _camera->getViewMatrix();
+    _sceneInfo.projection = glm::perspective(glm::radians(45.f), (float)_swapChainExtent.width / (float)_swapChainExtent.height, 0.1f, 1000.f);
+    _sceneInfo.projection[1][1] *= -1; // Invert Y axis for Vulkan
+
     _sceneInfo.time = 0.f;
     _sceneInfo.cameraPosition = _camera->getPosition();
     _sceneInfo.lightColor = glm::vec3(1.f);
     for(int i=0; i<MAX_FRAMES_IN_FLIGHT; i++) {
-        _sceneInfoUBOs[i] = std::make_unique<UniformBuffer<SceneInfo>>(_ctx, 2, VK_SHADER_STAGE_FRAGMENT_BIT);
+        _sceneInfoUBOs[i] = std::make_unique<UniformBuffer<SceneInfo>>(_ctx);
         _sceneInfoUBOs[i]->update(_sceneInfo);
     }
 
@@ -137,11 +135,11 @@ bool Renderer::initialize()
     _planetModels[1]->updateMaterial();
 
     // Earth
-    std::shared_ptr<DeviceTexture> colorTexture = std::make_shared<DeviceTexture>(_ctx, "textures/8k_earth_daymap.jpg", VK_FORMAT_R8G8B8A8_SRGB);
-    std::shared_ptr<DeviceTexture> unlitTexture = std::make_shared<DeviceTexture>(_ctx, "textures/8k_earth_nightmap.jpg", VK_FORMAT_R8G8B8A8_SRGB);
-    std::shared_ptr<DeviceTexture> normalTexture = std::make_shared<DeviceTexture>(_ctx, "textures/EarthNormal.png", VK_FORMAT_R8G8B8A8_UNORM);
-    std::shared_ptr<DeviceTexture> specularTexture = std::make_shared<DeviceTexture>(_ctx, "textures/EarthSpec.png", VK_FORMAT_R8G8B8A8_UNORM);
-    std::shared_ptr<DeviceTexture> overlayTexture = std::make_shared<DeviceTexture>(_ctx, "textures/8k_earth_clouds.jpg", VK_FORMAT_R8G8B8A8_SRGB);
+    std::shared_ptr<DeviceTexture> colorTexture = std::make_shared<DeviceTexture>(_ctx, "textures/earth/10k_earth_day.jpg", VK_FORMAT_R8G8B8A8_SRGB);
+    std::shared_ptr<DeviceTexture> unlitTexture = std::make_shared<DeviceTexture>(_ctx, "textures/earth/10k_earth_night.jpg", VK_FORMAT_R8G8B8A8_SRGB);
+    std::shared_ptr<DeviceTexture> normalTexture = std::make_shared<DeviceTexture>(_ctx, "textures/earth/2k_earth_normal.png", VK_FORMAT_R8G8B8A8_UNORM);
+    std::shared_ptr<DeviceTexture> specularTexture = std::make_shared<DeviceTexture>(_ctx, "textures/earth/2k_earth_specular.jpeg", VK_FORMAT_R8G8B8A8_UNORM);
+    std::shared_ptr<DeviceTexture> overlayTexture = std::make_shared<DeviceTexture>(_ctx, "textures/earth/8k_earth_clouds.png", VK_FORMAT_R8G8B8A8_SRGB);
     glm::mat4 earthModelMat = glm::mat4(1.f);
     earthModelMat = glm::translate(glm::mat4(1.f), glm::vec3(orbitRadEarth, 0.f, 0.f));
     earthModelMat = glm::scale(earthModelMat, glm::vec3(sizeEarth));
@@ -152,6 +150,13 @@ bool Renderer::initialize()
     earthOrbitModelMat = glm::scale(earthOrbitModelMat, glm::vec3(orbitRadEarth * 2.f));
     earthOrbitModelMat = glm::rotate(earthOrbitModelMat, glm::radians(90.f), glm::vec3(1.f, 0.f, 0.f));
     _orbitModels.push_back(std::make_unique<DeviceModel>(_ctx, quadDMesh, earthOrbitModelMat, nullptr, nullptr, nullptr, nullptr, nullptr, _textureSampler));
+
+    // Earth Atmosphere
+    glm::mat4 earthAtmosphereModelMat = glm::mat4(1.f);
+    earthAtmosphereModelMat = glm::translate(earthAtmosphereModelMat, glm::vec3(orbitRadEarth, 0.f, 0.f));
+    earthAtmosphereModelMat = glm::scale(earthAtmosphereModelMat, glm::vec3(sizeEarth * 1.05f));
+    _atmosphereModels.push_back(std::make_unique<AtmosphereModel>(_ctx, sphereDMesh, earthAtmosphereModelMat, glm::vec3(0.45f, 0.55f, 1.f)));
+
 
     // Moon
     std::shared_ptr<DeviceTexture> moonColorTexture = std::make_shared<DeviceTexture>(_ctx, "textures/2k_moon.jpg", VK_FORMAT_R8G8B8A8_SRGB);
@@ -231,33 +236,49 @@ bool Renderer::initialize()
     // Create per-frame descriptor sets
     for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
         std::vector<Descriptor> perSceneDescriptors = {
-            Descriptor(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT, 1, _mvpUBOs[i]->getDescriptorInfo()),         // MVP
-            Descriptor(1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT, 1, _sceneInfoUBOs[i]->getDescriptorInfo()), // Scene UBO
+            Descriptor(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 1, _sceneInfoUBOs[i]->getDescriptorInfo()), // Scene UBO
         };
-        _descriptorSets[i] = std::make_unique<DescriptorSet>(_ctx, perSceneDescriptors);
+        _sceneDescriptorSets[i] = std::make_unique<DescriptorSet>(_ctx, perSceneDescriptors);
     }
 
     VkDescriptorSetLayout perModelDSL = _planetModels[0]->getDescriptorSet()->getDescriptorSetLayout();
-    VkDescriptorSetLayout perFrameDSL = _descriptorSets[0]->getDescriptorSetLayout();
+    VkDescriptorSetLayout perFrameDSL = _sceneDescriptorSets[0]->getDescriptorSetLayout();
+    VkDescriptorSetLayout atmosphereDSL = _atmosphereModels[0]->getDescriptorSet()->getDescriptorSetLayout();
 
     // Create graphics pipeline
     PipelineParams pipelineParams {
         { perFrameDSL, perModelDSL },
-        { VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(glm::mat4) },
+        { VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConstants) },
         _renderPass,
-        _msaaSamples
+        _msaaSamples,
+        true,
+        true
     };
     _pipeline = std::make_unique<Pipeline>(_ctx, "spv/shader_vert.spv", "spv/shader_frag.spv", pipelineParams);
 
 
     // Create orbit pipeline
     PipelineParams orbitPipelineParams {
-        { perFrameDSL },                                      //Descriptor set layout
-        { VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(glm::mat4) }, //Push constants
-        _renderPass,                                          //Render pass
-        _msaaSamples
+        { perFrameDSL },                                          //Descriptor set layout
+        { VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PushConstants) }, //Push constants
+        _renderPass,                                              //Render pass
+        _msaaSamples,
+        true,
+        false
     };
     _orbitPipeline = std::make_unique<Pipeline>(_ctx, "spv/orbit_vert.spv", "spv/orbit_frag.spv", orbitPipelineParams);
+
+
+    // Create atmosphere pipeline
+    PipelineParams atmospherePipelineParams {
+        { perFrameDSL, atmosphereDSL },                                                          //Descriptor set layout
+        { VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConstants) }, //Push constants
+        _renderPass,                                                                             //Render pass
+        _msaaSamples,
+        false,
+        false
+    };
+    _atmospherePipeline = std::make_unique<Pipeline>(_ctx, "spv/shader_vert.spv", "spv/atmosphere_frag.spv", atmospherePipelineParams);
 
 
     // Create color resources
@@ -524,15 +545,15 @@ void Renderer::updateUniformBuffer(uint32_t currentImage) {
 
     float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
 
-    // Update MVP UBO
-    MVP mvp{};
-    mvp.model = glm::mat4(1.0f);
-    mvp.view = _camera->getViewMatrix(); 
-    mvp.projection = glm::perspective(glm::radians(45.0f), (float)_swapChainExtent.width / (float)_swapChainExtent.height, 0.1f, 1000.0f);
-    mvp.projection[1][1] *= -1; // Invert Y axis for Vulkan
-    _mvpUBOs[currentImage]->update(mvp);
+    // Rotate earth
+    float earthRotationSpeed = 0.002f; // Adjust this value to control the rotation speed
+    //float earthRotationAngle = time * earthRotationSpeed;
+    _planetModels[2]->setModelMatrix(glm::rotate(_planetModels[2]->getModelMatrix(), earthRotationSpeed, glm::vec3(0.f, 0.f, 1.f)));
 
     // Update SceneInfo UBO
+    _sceneInfo.view = _camera->getViewMatrix();
+    _sceneInfo.projection = glm::perspective(glm::radians(45.f), (float)_swapChainExtent.width / (float)_swapChainExtent.height, 0.1f, 1000.f);
+    _sceneInfo.projection[1][1] *= -1; // Invert Y axis for Vulkan
     _sceneInfo.time = time;
     _sceneInfo.cameraPosition = _camera->getPosition();
     _sceneInfoUBOs[currentImage]->update(_sceneInfo);
@@ -686,7 +707,7 @@ void Renderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t image
     vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
     _pipeline->bind(commandBuffer);
-    
+
     // Iterate over planets
     for(int m=0; m<static_cast<int>(_planetModels.size()); m++) {
         VkBuffer vertexBuffers[] = {_planetModels[m]->getDeviceMesh()->getVertexBuffer()};
@@ -695,30 +716,58 @@ void Renderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t image
         vkCmdBindIndexBuffer(commandBuffer, _planetModels[m]->getDeviceMesh()->getIndexBuffer(), 0, VK_INDEX_TYPE_UINT32); // We can only use one index buffer at a time
 
         std::array<VkDescriptorSet, 2> descriptorSets = {
-            _descriptorSets[_currentFrame]->getDescriptorSet(), // Per-frame descriptor set
+            _sceneDescriptorSets[_currentFrame]->getDescriptorSet(),  // Per-frame descriptor set
             _planetModels[m]->getDescriptorSet()->getDescriptorSet()  // Per-model descriptor set
         };
         vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, _pipeline->getPipelineLayout(), 0, 2, descriptorSets.data(), 0, nullptr);
-        vkCmdPushConstants(commandBuffer, _pipeline->getPipelineLayout(), VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(glm::mat4), &_planetModels[m]->getModelMatrix());
+
+        // Push constants for model
+        PushConstants pushConstants{};
+        pushConstants.model = _planetModels[m]->getModelMatrix();
+        vkCmdPushConstants(commandBuffer, _pipeline->getPipelineLayout(), VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConstants), &pushConstants);
+
         vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(_planetModels[m]->getDeviceMesh()->getIndicesCount()), 1, 0, 0, 0);
     }
 
-    // Draw orbit models
-    _orbitPipeline->bind(commandBuffer);
+    // Draw atmosphere models
+    _atmospherePipeline->bind(commandBuffer);
 
-    for(int m=0; m<static_cast<int>(_orbitModels.size()); m++) {
-        VkBuffer vertexBuffers[] = {_orbitModels[m]->getDeviceMesh()->getVertexBuffer()};
+    for(int m=0; m<static_cast<int>(_atmosphereModels.size()); m++) {
+        VkBuffer vertexBuffers[] = {_atmosphereModels[m]->getDeviceMesh()->getVertexBuffer()};
         VkDeviceSize offsets[] = {0};
         vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets); // We can have multiple vertex buffers
-        vkCmdBindIndexBuffer(commandBuffer, _orbitModels[m]->getDeviceMesh()->getIndexBuffer(), 0, VK_INDEX_TYPE_UINT32); // We can only use one index buffer at a time
+        vkCmdBindIndexBuffer(commandBuffer, _atmosphereModels[m]->getDeviceMesh()->getIndexBuffer(), 0, VK_INDEX_TYPE_UINT32); // We can only use one index buffer at a time
 
-        std::array<VkDescriptorSet, 1> descriptorSets = {
-            _descriptorSets[_currentFrame]->getDescriptorSet() // Per-frame descriptor set
+        std::array<VkDescriptorSet, 2> descriptorSets = {
+            _sceneDescriptorSets[_currentFrame]->getDescriptorSet(),      // Per-frame descriptor set
+            _atmosphereModels[m]->getDescriptorSet()->getDescriptorSet()  // Per-model descriptor set
         };
-        vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, _orbitPipeline->getPipelineLayout(), 0, 1, descriptorSets.data(), 0, nullptr);
-        vkCmdPushConstants(commandBuffer, _orbitPipeline->getPipelineLayout(), VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(glm::mat4), &_orbitModels[m]->getModelMatrix());
-        vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(_orbitModels[m]->getDeviceMesh()->getIndicesCount()), 1, 0, 0, 0);
+        vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, _atmospherePipeline->getPipelineLayout(), 0, 2, descriptorSets.data(), 0, nullptr);
+
+        // Push constants for model
+        PushConstants pushConstants{};
+        pushConstants.model = _atmosphereModels[m]->getModelMatrix();
+        vkCmdPushConstants(commandBuffer, _atmospherePipeline->getPipelineLayout(), VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConstants), &pushConstants);
+
+        vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(_atmosphereModels[m]->getDeviceMesh()->getIndicesCount()), 1, 0, 0, 0);
     }
+
+    // // Draw orbit models
+    // _orbitPipeline->bind(commandBuffer);
+
+    // for(int m=0; m<static_cast<int>(_orbitModels.size()); m++) {
+    //     VkBuffer vertexBuffers[] = {_orbitModels[m]->getDeviceMesh()->getVertexBuffer()};
+    //     VkDeviceSize offsets[] = {0};
+    //     vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets); // We can have multiple vertex buffers
+    //     vkCmdBindIndexBuffer(commandBuffer, _orbitModels[m]->getDeviceMesh()->getIndexBuffer(), 0, VK_INDEX_TYPE_UINT32); // We can only use one index buffer at a time
+
+    //     std::array<VkDescriptorSet, 1> descriptorSets = {
+    //         _sceneDescriptorSets[_currentFrame]->getDescriptorSet() // Per-frame descriptor set
+    //     };
+    //     vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, _orbitPipeline->getPipelineLayout(), 0, 1, descriptorSets.data(), 0, nullptr);
+    //     vkCmdPushConstants(commandBuffer, _orbitPipeline->getPipelineLayout(), VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(glm::mat4), &_orbitModels[m]->getModelMatrix());
+    //     vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(_orbitModels[m]->getDeviceMesh()->getIndicesCount()), 1, 0, 0, 0);
+    // }
     
     vkCmdEndRenderPass(commandBuffer);
 

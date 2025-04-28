@@ -47,7 +47,7 @@ DeviceModel::DeviceModel(
     material.specularStrength = 3.0f;
     material.sunShadeMode = 0;
 
-    _materialUBO = std::make_unique<UniformBuffer<Material>>(_ctx, 1, VK_SHADER_STAGE_FRAGMENT_BIT);
+    _materialUBO = std::make_unique<UniformBuffer<Material>>(_ctx);
     _materialUBO->update(material);
 
     // Per-model descriptor set

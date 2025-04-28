@@ -7,22 +7,17 @@ class UniformBuffer
 {
 public:
 
-    UniformBuffer(std::shared_ptr<VulkanContext> ctx, uint32_t binding, VkShaderStageFlags stageFlags);
+    UniformBuffer(std::shared_ptr<VulkanContext> ctx);
     ~UniformBuffer();
 
     void update(const T& data);
 
     VkBuffer getBuffer() const { return _uniformBuffer; }
-    uint32_t getBinding() const { return _binding; }
-    VkShaderStageFlags getStageFlags() const { return _stageFlags; }
     VkDescriptorBufferInfo getDescriptorInfo() const;
 
 private:
 
     std::shared_ptr<VulkanContext> _ctx;
-
-    uint32_t _binding;
-    VkShaderStageFlags _stageFlags;
 
     VkBuffer _uniformBuffer;
     VkDeviceMemory _uniformBufferMemory;
@@ -30,8 +25,8 @@ private:
 };
 
 template<typename T>
-UniformBuffer<T>::UniformBuffer(std::shared_ptr<VulkanContext> ctx, uint32_t binding, VkShaderStageFlags stageFlags)
-    : _ctx(std::move(ctx)), _binding(binding), _stageFlags(stageFlags)
+UniformBuffer<T>::UniformBuffer(std::shared_ptr<VulkanContext> ctx)
+    : _ctx(std::move(ctx))
 {
     // Create uniform buffer
     VkDeviceSize bufferSize = sizeof(T); // Size of the uniform buffer

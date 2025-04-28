@@ -80,5 +80,4 @@ private:
 
     std::unique_ptr<UniformBuffer<Material>> _materialUBO;
     std::unique_ptr<DescriptorSet> _descriptorSet;
-
 };

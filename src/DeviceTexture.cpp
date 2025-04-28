@@ -13,6 +13,7 @@ DeviceTexture::DeviceTexture(std::shared_ptr<VulkanContext> ctx, const std::stri
         spdlog::error("Failed to load texture image!");
         return;
     }
+    spdlog::info("Loaded texture image: {} ({}x{}) channels: {}", path, texWidth, texHeight, texChannels);
 
     _width = texWidth;
     _height = texHeight;
