@@ -13,6 +13,7 @@ layout(set = 0, binding = 0) uniform SceneInfo {
 // Per-model variabales that change a lot 
 layout(push_constant) uniform PushConstants {
     mat4 model;
+    uint objectId;
 } pc;
 
 layout(location = 0) in vec3 inPosition; // Vertex position

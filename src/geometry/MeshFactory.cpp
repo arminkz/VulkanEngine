@@ -4,6 +4,66 @@
 
 namespace MeshFactory {
 
+    // HostMesh createSphereMesh(float radius, int segments, int rings, bool skySphere) {
+    //     const float PI = 3.14159265359f;
+
+    //     HostMesh mesh;
+
+    //     for (unsigned int i = 0; i <= rings; ++i) {
+    //         float phi = PI * i / rings; // φ from 0 to π
+
+    //         for (unsigned int j = 0; j <= segments; ++j) {
+    //             float theta = 2 * PI * j / segments; // θ from 0 to 2π
+
+    //             // Spherical to Cartesian conversion
+    //             float x = radius * sinf(phi) * cosf(theta);
+    //             float y = radius * cosf(phi);
+    //             float z = radius * sinf(phi) * sinf(theta);
+
+    //             Vertex vertex;
+    //             vertex.pos = { x, y, z };
+    //             vertex.color = glm::vec4(1.f); // Default color (white)
+    //             vertex.texCoord = { static_cast<float>(j) / segments, static_cast<float>(i) / rings };
+    //             vertex.normal = { x / radius, y / radius, z / radius }; // Normalized position vector
+    //             vertex.tangent = { -sinf(theta), 0.0f, cosf(theta) }; // Tangent vector (for normal mapping)
+
+    //             // Add vertex to mesh
+    //             mesh.vertices.push_back(vertex);
+    //         }
+    //     }
+
+    //     // Generate indices for triangle strips
+    //     for (unsigned int i = 0; i < rings; ++i) {
+    //         for (unsigned int j = 0; j < segments; ++j) {
+    //             unsigned int first = i *  (segments + 1) + j;
+    //             unsigned int second = first + segments + 1;
+
+    //             if(!skySphere){
+    //                 mesh.indices.push_back(first);
+    //                 mesh.indices.push_back(second);
+    //                 mesh.indices.push_back(first + 1);
+    
+    //                 mesh.indices.push_back(first + 1);
+    //                 mesh.indices.push_back(second);
+    //                 mesh.indices.push_back(second + 1);
+    //             }
+    //             else{
+    //                 mesh.indices.push_back(first);
+    //                 mesh.indices.push_back(first + 1);
+    //                 mesh.indices.push_back(second);
+                    
+    
+    //                 mesh.indices.push_back(first + 1);
+    //                 mesh.indices.push_back(second + 1);
+    //                 mesh.indices.push_back(second);
+    //             }
+
+    //         }
+    //     }
+
+    //     return mesh;
+    // }
+
     HostMesh createSphereMesh(float radius, int segments, int rings, bool skySphere)
     {
         HostMesh mesh;
@@ -31,7 +91,7 @@ namespace MeshFactory {
                 vert.color = glm::vec4(1.f);
                 vert.texCoord = { u, v };
                 vert.normal = glm::normalize(vert.pos);
-                vert.tangent = glm::normalize(glm::vec3(-sinPhi * sinTheta, cosPhi * sinTheta, 0.0f));
+                vert.tangent = glm::normalize(glm::vec3(-sinPhi, cosPhi, 0.0)); // Tangent (u direction)
 
                 // Add vertex
                 mesh.vertices.push_back(vert);

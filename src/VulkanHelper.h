@@ -104,6 +104,7 @@ namespace VulkanHelper {
     void createBuffer(std::shared_ptr<VulkanContext> ctx, VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory);
     void copyBuffer(std::shared_ptr<VulkanContext> ctx, VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
     void copyBufferToImage(std::shared_ptr<VulkanContext> ctx, VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
+    void copyImageToBuffer(std::shared_ptr<VulkanContext> ctx, VkImage image, VkBuffer buffer, uint32_t width, uint32_t height);
     
     void createImage(std::shared_ptr<VulkanContext> ctx, uint32_t width, uint32_t height, VkFormat format, uint32_t mipLevels, VkSampleCountFlagBits numSamples, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory);
     VkImageView createImageView(std::shared_ptr<VulkanContext> ctx, VkImage image, VkFormat format, uint32_t mipLevels, VkImageAspectFlags aspectFlags);

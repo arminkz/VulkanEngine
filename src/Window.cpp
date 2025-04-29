@@ -112,6 +112,11 @@ bool Window::eventCallback(void *userdata, SDL_Event *event)
         self->onMouseWheel(event->wheel.x, event->wheel.y);
         return false;
     }
+
+    // Keyboard down event
+    if (event->type == SDL_EVENT_KEY_DOWN) {
+        self->onKeyDown(event->key.key, event->key.scancode, event->key.mod);
+    }
     
     // Return true to process the event, false to drop it
     return true;
@@ -144,6 +149,8 @@ void Window::onMouseButtonDown(int button, float x, float y)
     // Handle mouse button down event
     if (button == SDL_BUTTON_LEFT) {
         _isMouseDown = true;
+
+        _renderer->drawSelectionImage(x, y); // Example function to draw selection image
     }
 }
 
@@ -159,4 +166,12 @@ void Window::onMouseWheel(float x, float y)
 {
     // Handle mouse wheel event
     _renderer->getCamera()->changeZoom(static_cast<float>(y)); // Example function to change camera radius based on mouse wheel
+}
+
+void Window::onKeyDown(int key, int scancode, int modifiers)
+{
+    // Handle key down event
+    if (key == SDLK_A) {
+        spdlog::info("Key A pressed");
+    }
 }

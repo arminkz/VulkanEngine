@@ -18,6 +18,7 @@ protected:
     void onMouseButtonDown(int button, float x, float y);
     void onMouseButtonUp(int button, float x, float y);
     void onMouseWheel(float x, float y);
+    void onKeyDown(int key, int scancode, int modifiers);
 
 private:
     bool _isMouseDown = false;

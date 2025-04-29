@@ -9,6 +9,9 @@
 #include "geometry/DeviceMesh.h"
 #include "geometry/MeshFactory.h"
 
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "stb_image_write.h"
+
 Renderer::Renderer(std::shared_ptr<VulkanContext> ctx)
     : _ctx(std::move(ctx))
 {
@@ -124,6 +127,7 @@ bool Renderer::initialize()
     _planetModels[0]->material.ambientStrength = 0.3f;
     _planetModels[0]->material.specularStrength = 0.0f;
     _planetModels[0]->updateMaterial();
+    spdlog::info("SkySphere ID: {}", _planetModels[0]->getID());
 
     //Sun
     std::shared_ptr<DeviceTexture> sunTexture = std::make_shared<DeviceTexture>(_ctx, "textures/2k_sun.jpg", VK_FORMAT_R8G8B8A8_SRGB);
@@ -133,6 +137,7 @@ bool Renderer::initialize()
     _planetModels.push_back(std::make_unique<DeviceModel>(_ctx, sphereDMesh, sunModelMat, sunTexture, nullptr, nullptr, nullptr, sunPerlinTexture, _textureSampler));
     _planetModels[1]->material.sunShadeMode = 1;
     _planetModels[1]->updateMaterial();
+    spdlog::info("Sun ID: {}", _planetModels[1]->getID());
 
     // Earth
     std::shared_ptr<DeviceTexture> colorTexture = std::make_shared<DeviceTexture>(_ctx, "textures/earth/10k_earth_day.jpg", VK_FORMAT_R8G8B8A8_SRGB);
@@ -144,6 +149,7 @@ bool Renderer::initialize()
     earthModelMat = glm::translate(glm::mat4(1.f), glm::vec3(orbitRadEarth, 0.f, 0.f));
     earthModelMat = glm::scale(earthModelMat, glm::vec3(sizeEarth));
     _planetModels.push_back(std::make_unique<DeviceModel>(_ctx, sphereDMesh, earthModelMat, colorTexture, unlitTexture, normalTexture, specularTexture, overlayTexture, _textureSampler));
+    spdlog::info("Earth ID: {}", _planetModels[2]->getID());
 
     // Earth Orbit
     glm::mat4 earthOrbitModelMat = glm::mat4(1.f);
@@ -228,10 +234,11 @@ bool Renderer::initialize()
     spdlog::info("Max MSAA samples: {}", static_cast<int>(_msaaSamples));
 
     // Create swap chain
-    if (!createSwapChain()) return false;
+    createSwapChain();
 
     // Create render pass
-    if (!createRenderPass()) return false;
+    createRenderPass();
+    createObjectSelectionRenderPass();
 
     // Create per-frame descriptor sets
     for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
@@ -281,14 +288,22 @@ bool Renderer::initialize()
     _atmospherePipeline = std::make_unique<Pipeline>(_ctx, "spv/shader_vert.spv", "spv/atmosphere_frag.spv", atmospherePipelineParams);
 
 
-    // Create color resources
+    PipelineParams objectSelectionPipelineParams {};
+    objectSelectionPipelineParams.descriptorSetLayouts = { perFrameDSL, perModelDSL };
+    objectSelectionPipelineParams.pushConstantRange = { VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConstants) };
+    objectSelectionPipelineParams.renderPass = _objectSelectionRenderPass;
+    objectSelectionPipelineParams.transparency = false; // No transparency for object selection
+
+    _objectSelectionPipeline = std::make_unique<Pipeline>(_ctx, "spv/shader_vert.spv", "spv/objectselect_frag.spv", objectSelectionPipelineParams);
+
+
     createColorResources();
-
-    // Create depth resources
     createDepthResources();
+    createFramebuffers();
 
-    // Create framebuffers
-    if (!createFramebuffers()) return false;
+    createObjectSelectionResources();
+    createObjectSelectionDepthResources();
+    createObjectSelectionFramebuffer();
 
     // Create command buffers
     if (!createCommandBuffers()) return false;
@@ -331,7 +346,7 @@ VkExtent2D Renderer::chooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabiliti
     }
 }
 
-bool Renderer::createSwapChain() {
+void Renderer::createSwapChain() {
     SwapChainSupportDetails swapChainSupport = querySwapChainSupport(_ctx->physicalDevice, _ctx->surface);
 
     VkSurfaceFormatKHR surfaceFormat = chooseSwapSurfaceFormat(swapChainSupport.formats);
@@ -373,11 +388,9 @@ bool Renderer::createSwapChain() {
     swapChainCreateInfo.oldSwapchain = VK_NULL_HANDLE;
 
     if (vkCreateSwapchainKHR(_ctx->device, &swapChainCreateInfo, nullptr, &_swapChain) != VK_SUCCESS) {
-        spdlog::error("Failed to create swap chain!");
-        return false;
-    } else {
-        spdlog::info("Swap chain created successfully");
+        throw std::runtime_error("Failed to create swap chain!");
     }
+    spdlog::info("Swap chain created successfully");
 
     vkGetSwapchainImagesKHR(_ctx->device, _swapChain, &imageCount, nullptr);
     _swapChainImages.resize(imageCount);
@@ -393,10 +406,9 @@ bool Renderer::createSwapChain() {
         _swapChainImageViews[i] = VulkanHelper::createImageView(_ctx, _swapChainImages[i], _swapChainImageFormat, 1, VK_IMAGE_ASPECT_COLOR_BIT);
     }
 
-    return true;
 }
 
-bool Renderer::recreateSwapChain() {
+void Renderer::recreateSwapChain() {
     vkDeviceWaitIdle(_ctx->device);
 
     // Destroy old swap chain
@@ -407,7 +419,10 @@ bool Renderer::recreateSwapChain() {
     createColorResources();
     createDepthResources();
     createFramebuffers();
-    return true;
+
+    createObjectSelectionResources();
+    createObjectSelectionDepthResources();
+    createObjectSelectionFramebuffer();
 }
 
 void Renderer::cleanupSwapChain() {
@@ -431,7 +446,7 @@ void Renderer::cleanupSwapChain() {
     vkDestroySwapchainKHR(_ctx->device, _swapChain, nullptr);
 }
 
-bool Renderer::createRenderPass() {
+void Renderer::createRenderPass() {
     
     VkAttachmentDescription colorAttachment{};
     colorAttachment.format = _swapChainImageFormat;
@@ -443,15 +458,15 @@ bool Renderer::createRenderPass() {
     colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     colorAttachment.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
-    VkAttachmentDescription colorAttachmentResolve{};
-    colorAttachmentResolve.format = _swapChainImageFormat;
-    colorAttachmentResolve.samples = VK_SAMPLE_COUNT_1_BIT;
-    colorAttachmentResolve.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-    colorAttachmentResolve.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-    colorAttachmentResolve.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-    colorAttachmentResolve.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    colorAttachmentResolve.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    colorAttachmentResolve.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    VkAttachmentDescription resolveAttachment{};
+    resolveAttachment.format = _swapChainImageFormat;
+    resolveAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
+    resolveAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    resolveAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    resolveAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    resolveAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    resolveAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    resolveAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 
     VkAttachmentDescription depthAttachment{};
     depthAttachment.format = findDepthFormat();
@@ -471,16 +486,16 @@ bool Renderer::createRenderPass() {
     depthAttachmentRef.attachment = 1;
     depthAttachmentRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
-    VkAttachmentReference colorAttachmentResolveRef{};
-    colorAttachmentResolveRef.attachment = 2;
-    colorAttachmentResolveRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    VkAttachmentReference resolveAttachmentRef{};
+    resolveAttachmentRef.attachment = 2;
+    resolveAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
     VkSubpassDescription subpass{};
     subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
     subpass.colorAttachmentCount = 1;
     subpass.pColorAttachments = &colorAttachmentRef;
     subpass.pDepthStencilAttachment = &depthAttachmentRef; // Attach depth attachment
-    subpass.pResolveAttachments = &colorAttachmentResolveRef; // Attach resolve attachment
+    subpass.pResolveAttachments = &resolveAttachmentRef;   // Attach resolve attachment
 
     // Subpass has to wait for the swapchain to be ready before it can start rendering
     VkSubpassDependency dependency{};
@@ -491,7 +506,7 @@ bool Renderer::createRenderPass() {
     dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
     dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
 
-    std::array<VkAttachmentDescription, 3> attachments = { colorAttachment, depthAttachment, colorAttachmentResolve };
+    std::array<VkAttachmentDescription, 3> attachments = { colorAttachment, depthAttachment, resolveAttachment };
 
     VkRenderPassCreateInfo renderPassInfo{};
     renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
@@ -503,22 +518,81 @@ bool Renderer::createRenderPass() {
     renderPassInfo.pDependencies = &dependency;
 
     if (vkCreateRenderPass(_ctx->device, &renderPassInfo, nullptr, &_renderPass) != VK_SUCCESS) {
-        spdlog::error("Failed to create render pass!");
-        return false;
-    }else {
-        spdlog::info("Render pass created successfully");
-        return true;
+        throw std::runtime_error("Failed to create render pass!");
+    }
+    spdlog::info("Render pass created successfully");
+}
+
+void Renderer::createObjectSelectionRenderPass() {
+
+    VkAttachmentDescription idAttachment{};
+    idAttachment.format = VK_FORMAT_R32_UINT;  // Stores uint object IDs
+    idAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
+    idAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    idAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    idAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    idAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    idAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    idAttachment.finalLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL; // for reading pixel data
+
+    VkAttachmentDescription depthAttachment{};
+    depthAttachment.format = findDepthFormat(); // same as usual
+    depthAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
+    depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    depthAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    depthAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    depthAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    depthAttachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+
+    VkAttachmentReference idAttachmentRef{};
+    idAttachmentRef.attachment = 0;
+    idAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+    VkAttachmentReference depthAttachmentRef{};
+    depthAttachmentRef.attachment = 1;
+    depthAttachmentRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+
+    VkSubpassDescription subpass{};
+    subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+    subpass.colorAttachmentCount = 1;
+    subpass.pColorAttachments = &idAttachmentRef;
+    subpass.pDepthStencilAttachment = &depthAttachmentRef;
+
+    VkSubpassDependency dependency{};
+    dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
+    dependency.dstSubpass = 0;
+    dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+    dependency.srcAccessMask = 0;
+    dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+    dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+
+    std::array<VkAttachmentDescription, 2> attachments = { idAttachment, depthAttachment };
+
+    VkRenderPassCreateInfo renderPassInfo{};
+    renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+    renderPassInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
+    renderPassInfo.pAttachments = attachments.data();
+    renderPassInfo.subpassCount = 1;
+    renderPassInfo.pSubpasses = &subpass;
+    renderPassInfo.dependencyCount = 1;
+    renderPassInfo.pDependencies = &dependency;
+
+    if (vkCreateRenderPass(_ctx->device, &renderPassInfo, nullptr, &_objectSelectionRenderPass) != VK_SUCCESS) {
+        throw std::runtime_error("Failed to create object selection render pass!");
+    } else {
+        spdlog::info("Object selection render pass created successfully");
     }
 }
 
-bool Renderer::createFramebuffers() {
+void Renderer::createFramebuffers() {
     _swapChainFramebuffers.resize(_swapChainImageViews.size());
 
     for (size_t i = 0; i < _swapChainImageViews.size(); i++) {
         std::array<VkImageView, 3> attachments = {
             _colorImageView,
             _depthImageView,
-            _swapChainImageViews[i]
+            _swapChainImageViews[i] // Write resolved color to swap chain image view
         };
 
         VkFramebufferCreateInfo framebufferInfo{};
@@ -531,12 +605,47 @@ bool Renderer::createFramebuffers() {
         framebufferInfo.layers = 1;
 
         if (vkCreateFramebuffer(_ctx->device, &framebufferInfo, nullptr, &_swapChainFramebuffers[i]) != VK_SUCCESS) {
-            spdlog::error("Failed to create framebuffer!");
-            return false;
+            throw std::runtime_error("Failed to create framebuffer!");
         }
     }
+}
 
-    return true;
+void Renderer::createObjectSelectionFramebuffer() {
+    std:: array<VkImageView, 2> attachments = {
+        _objectSelectionImageView,
+        _objectSelectionDepthImageView
+    };
+
+    VkFramebufferCreateInfo framebufferInfo{};
+    framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+    framebufferInfo.renderPass = _objectSelectionRenderPass;
+    framebufferInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
+    framebufferInfo.pAttachments = attachments.data();
+    framebufferInfo.width = _swapChainExtent.width;
+    framebufferInfo.height = _swapChainExtent.height;
+    framebufferInfo.layers = 1;
+
+    if (vkCreateFramebuffer(_ctx->device, &framebufferInfo, nullptr, &_objectSelectionFramebuffer) != VK_SUCCESS) {
+        throw std::runtime_error("Failed to create framebuffer!");
+    }
+}
+
+void Renderer::createObjectSelectionDepthResources()
+{
+    VkFormat depthFormat = findDepthFormat(); // Find a suitable depth format
+
+    VulkanHelper::createImage(_ctx, _swapChainExtent.width, _swapChainExtent.height, 
+        depthFormat,
+        1,                     // Number of mip levels
+        VK_SAMPLE_COUNT_1_BIT, // Number of samples for multisampling
+        VK_IMAGE_TILING_OPTIMAL, 
+        VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, 
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 
+        _objectSelectionDepthImage, _objectSelectionDepthImageMemory);
+
+    //transitionImageLayout(_depthImage, depthFormat, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+    _objectSelectionDepthImageView = VulkanHelper::createImageView(_ctx, _objectSelectionDepthImage, depthFormat, 1, VK_IMAGE_ASPECT_DEPTH_BIT);
+
 }
 
 void Renderer::updateUniformBuffer(uint32_t currentImage) {
@@ -566,7 +675,7 @@ void Renderer::createDepthResources()
 
     VulkanHelper::createImage(_ctx, _swapChainExtent.width, _swapChainExtent.height, 
         depthFormat,
-        1, // Number of mip levels
+        1,            // Number of mip levels
         _msaaSamples, // Number of samples for multisampling
         VK_IMAGE_TILING_OPTIMAL, 
         VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, 
@@ -576,6 +685,24 @@ void Renderer::createDepthResources()
     //transitionImageLayout(_depthImage, depthFormat, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
     _depthImageView = VulkanHelper::createImageView(_ctx, _depthImage, depthFormat, 1, VK_IMAGE_ASPECT_DEPTH_BIT);
 
+}
+
+void Renderer::createObjectSelectionResources() {
+
+    VkFormat idFormat = VK_FORMAT_R32_UINT; // Use a format that can store uint IDs
+
+    VulkanHelper::createImage(_ctx,
+        _swapChainExtent.width, 
+        _swapChainExtent.height, 
+        idFormat,
+        1,                     // Number of mip levels (not used here)
+        VK_SAMPLE_COUNT_1_BIT, // No multisampling for ID attachment
+        VK_IMAGE_TILING_OPTIMAL, 
+        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, // Color attachment and transfer source
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 
+        _objectSelectionImage, _objectSelectionImageMemory);
+
+    _objectSelectionImageView = VulkanHelper::createImageView(_ctx, _objectSelectionImage, idFormat, 1, VK_IMAGE_ASPECT_COLOR_BIT);
 }
 
 void Renderer::createColorResources() {
@@ -595,6 +722,8 @@ void Renderer::createColorResources() {
 
     _colorImageView = VulkanHelper::createImageView(_ctx, _colorImage, colorFormat, 1, VK_IMAGE_ASPECT_COLOR_BIT);
 }
+
+
 
 VkFormat Renderer::findSupportedFormat(const std::vector<VkFormat>& candidates, VkImageTiling tiling, VkFormatFeatureFlags features)
 {
@@ -866,4 +995,115 @@ void Renderer::drawFrame() {
     }
 
     _currentFrame = (_currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
+}
+
+
+void Renderer::drawSelectionImage(float mouseX, float mouseY) {
+
+    VkCommandBuffer cmdBuffer = VulkanHelper::beginSingleTimeCommands(_ctx);
+
+    VkRenderPassBeginInfo renderPassBeginInfo{};
+    renderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+    renderPassBeginInfo.renderPass = _objectSelectionRenderPass;
+    renderPassBeginInfo.framebuffer = _objectSelectionFramebuffer;
+    renderPassBeginInfo.renderArea.offset = { 0, 0 };
+    renderPassBeginInfo.renderArea.extent = _swapChainExtent;
+
+    std::array<VkClearValue, 2> clearValues{};
+    clearValues[0].color.uint32[0] = 0;                    // Clear color (ID attachment)
+    clearValues[1].depthStencil = { 1.0f, 0 };             // Clear depth value
+    renderPassBeginInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
+    renderPassBeginInfo.pClearValues = clearValues.data();
+
+    vkCmdBeginRenderPass(cmdBuffer, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+    VkViewport viewport{};
+    viewport.x = 0.0f;
+    viewport.y = 0.0f;
+    viewport.width = (float) _swapChainExtent.width;
+    viewport.height = (float) _swapChainExtent.height;
+    viewport.minDepth = 0.0f;
+    viewport.maxDepth = 1.0f;
+    vkCmdSetViewport(cmdBuffer, 0, 1, &viewport);
+
+    //TODO: In Object Selection we only care about the pixel under the mouse position, set scissor rect to a 1x1 pixel under mouse
+    // VkRect2D scissor{};
+    // scissor.offset = {0, 0};
+    // scissor.extent = _swapChainExtent;
+    // vkCmdSetScissor(cmdBuffer, 0, 1, &scissor);
+    VkRect2D scissor{};
+    scissor.offset = {static_cast<int32_t>(mouseX), static_cast<int32_t>(mouseY)}; // Set scissor rect to mouse position
+    scissor.extent = {1, 1}; // 1x1 pixel
+    vkCmdSetScissor(cmdBuffer, 0, 1, &scissor);
+
+    _objectSelectionPipeline->bind(cmdBuffer);
+
+    // Iterate over planets (selectable objects)
+    for(int m=0; m<static_cast<int>(_planetModels.size()); m++) {
+        VkBuffer vertexBuffers[] = {_planetModels[m]->getDeviceMesh()->getVertexBuffer()};
+        VkDeviceSize offsets[] = {0};
+        vkCmdBindVertexBuffers(cmdBuffer, 0, 1, vertexBuffers, offsets); // We can have multiple vertex buffers
+        vkCmdBindIndexBuffer(cmdBuffer, _planetModels[m]->getDeviceMesh()->getIndexBuffer(), 0, VK_INDEX_TYPE_UINT32); // We can only use one index buffer at a time
+
+        std::array<VkDescriptorSet, 1> descriptorSets = {
+            _sceneDescriptorSets[_currentFrame]->getDescriptorSet()  // Per-frame descriptor set
+            // Per-model descriptor set is not needed here beacuse we dont care about material when drawing ids.
+            //_planetModels[m]->getDescriptorSet()->getDescriptorSet()  
+        };
+        vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, _objectSelectionPipeline->getPipelineLayout(), 0, 1, descriptorSets.data(), 0, nullptr);
+
+        // Push constants for model
+        PushConstants pushConstants{};
+        pushConstants.model = _planetModels[m]->getModelMatrix();
+        pushConstants.objectID = _planetModels[m]->getID();
+        vkCmdPushConstants(cmdBuffer, _objectSelectionPipeline->getPipelineLayout(), VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConstants), &pushConstants);
+
+        vkCmdDrawIndexed(cmdBuffer, static_cast<uint32_t>(_planetModels[m]->getDeviceMesh()->getIndicesCount()), 1, 0, 0, 0);
+    }
+
+    vkCmdEndRenderPass(cmdBuffer);
+
+    VulkanHelper::endSingleTimeCommands(_ctx, cmdBuffer);
+
+    // Create a staging buffer to read the pixel data from the object selection image
+    VkBuffer stagingBuffer;
+    VkDeviceMemory stagingBufferMemory;
+    VkDeviceSize imageSize = _swapChainExtent.width * _swapChainExtent.height * sizeof(uint32_t); // Assuming 1 bytes per pixel (uint32_t)
+    VulkanHelper::createBuffer(_ctx, imageSize, 
+        VK_BUFFER_USAGE_TRANSFER_DST_BIT, 
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, 
+        stagingBuffer, stagingBufferMemory);
+
+    // Copy the object selection image to the staging buffer for reading pixel data
+    VulkanHelper::copyImageToBuffer(_ctx, _objectSelectionImage, stagingBuffer, _swapChainExtent.width, _swapChainExtent.height);
+
+    // Map the memory and read the pixel data
+    uint32_t* pixelData = new uint32_t[_swapChainExtent.width * _swapChainExtent.height];
+    void* data;
+    vkMapMemory(_ctx->device, stagingBufferMemory, 0, imageSize, 0, &data);
+    memcpy(pixelData, data, (size_t)imageSize);
+
+    // Unmap and free the staging buffer
+    vkUnmapMemory(_ctx->device, stagingBufferMemory);
+    vkDestroyBuffer(_ctx->device, stagingBuffer, nullptr);
+    vkFreeMemory(_ctx->device, stagingBufferMemory, nullptr);
+
+    // Read mouseX and mouseY pixel data
+    int mousePixel = static_cast<int>(mouseX) + static_cast<int>(mouseY) * _swapChainExtent.width;
+    uint32_t selectedObjectID = pixelData[mousePixel]; // Assuming the ID is stored in the first channel
+    spdlog::info("Selected object ID: {}", selectedObjectID);
+
+    // uint8_t* pixelData8 = new uint8_t[_swapChainExtent.width * _swapChainExtent.height];
+    // for (size_t i = 0; i < _swapChainExtent.width * _swapChainExtent.height; ++i) {
+    //     pixelData8[i] = static_cast<uint8_t>(pixelData[i]); // Convert to uint8_t if needed
+    // }
+
+    // // Save the pixel data to a file or process it as needed
+    // // For example, you can save it to a PNG file using a library like stb_image_write
+    // stbi_write_png("object_selection.png", _swapChainExtent.width, _swapChainExtent.height, 1, pixelData8, _swapChainExtent.width);
+
+    // // Clean up
+    // delete[] pixelData8;
+
+    delete[] pixelData;
 }

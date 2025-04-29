@@ -3,17 +3,7 @@
 #include "VulkanHelper.h"
 #include "DescriptorSet.h"
 
-DeviceModel::DeviceModel(
-    std::shared_ptr<VulkanContext> ctx, 
-    std::shared_ptr<DeviceMesh> mesh, 
-    glm::mat4 modelMatrix,
-    glm::vec3 color)
-    : _ctx(std::move(ctx))
-    , _mesh(std::move(mesh))
-{
-    _color = color;
-    _modelMatrix = modelMatrix;
-}
+int DeviceModel::objectIDCounter = 1;
 
 DeviceModel::DeviceModel(
     std::shared_ptr<VulkanContext> ctx, 
@@ -27,6 +17,7 @@ DeviceModel::DeviceModel(
     std::shared_ptr<TextureSampler> textureSampler
 )
     : _ctx(std::move(ctx))
+    , _objectID(++objectIDCounter)
     , _mesh(std::move(mesh))
     , _baseColorTexture(std::move(baseColorTexture))
     , _unlitColorTexture(std::move(unlitColorTexture))

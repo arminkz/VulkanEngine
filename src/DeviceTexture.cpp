@@ -13,7 +13,7 @@ DeviceTexture::DeviceTexture(std::shared_ptr<VulkanContext> ctx, const std::stri
         spdlog::error("Failed to load texture image!");
         return;
     }
-    spdlog::info("Loaded texture image: {} ({}x{}) channels: {}", path, texWidth, texHeight, texChannels);
+    //spdlog::info("Loaded texture image: {} ({}x{}) channels: {}", path, texWidth, texHeight, texChannels);
 
     _width = texWidth;
     _height = texHeight;
@@ -60,7 +60,7 @@ DeviceTexture::DeviceTexture(std::shared_ptr<VulkanContext> ctx, const std::stri
     vkFreeMemory(_ctx->device, stagingBufferMemory, nullptr); // Free the staging buffer memory
 
     // Generate Mipmaps for the texture image
-    spdlog::info("Generating Mipmaps for {} levels: {}", path, _mipLevels);
+    //spdlog::info("Generating Mipmaps for {} levels: {}", path, _mipLevels);
     generateMipmaps(); // Generate mipmaps for the texture image
 
     // Create ImageView

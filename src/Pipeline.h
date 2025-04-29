@@ -12,6 +12,7 @@ struct PipelineParams
     VkSampleCountFlagBits msaaSamples = VK_SAMPLE_COUNT_1_BIT;
     bool depthTest = true;
     bool depthWrite = true;
+    bool transparency = true;
 };
 
 class Pipeline

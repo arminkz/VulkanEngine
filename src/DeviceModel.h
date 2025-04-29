@@ -12,13 +12,6 @@ class DeviceModel
 {
 public:
     DeviceModel(
-        std::shared_ptr<VulkanContext> ctx,
-        std::shared_ptr<DeviceMesh> mesh,
-        glm::mat4 modelMatrix,
-        glm::vec3 color
-    );
-
-    DeviceModel(
         std::shared_ptr<VulkanContext> ctx, 
         std::shared_ptr<DeviceMesh> mesh,
         glm::mat4 modelMatrix,
@@ -31,6 +24,8 @@ public:
     );
     
     ~DeviceModel();
+
+    const int getID() const { return _objectID; }
 
     const DeviceMesh* getDeviceMesh() const { return _mesh.get(); }
 
@@ -63,6 +58,9 @@ public:
     const DescriptorSet* getDescriptorSet() const { return _descriptorSet.get(); }
 
 private:
+    static int objectIDCounter;
+    int _objectID;
+
     std::shared_ptr<VulkanContext> _ctx;
     
     std::shared_ptr<DeviceMesh> _mesh;

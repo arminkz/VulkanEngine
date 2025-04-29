@@ -131,6 +131,32 @@ namespace VulkanHelper {
 
         endSingleTimeCommands(ctx, commandBuffer);
     }
+
+    void copyImageToBuffer(std::shared_ptr<VulkanContext> ctx, 
+                           VkImage image, 
+                           VkBuffer buffer, 
+                           uint32_t width, 
+                           uint32_t height) 
+    {
+        VkCommandBuffer commandBuffer = beginSingleTimeCommands(ctx);
+    
+        VkBufferImageCopy region{};
+        region.bufferOffset = 0;
+        region.bufferRowLength = 0; // Optional
+        region.bufferImageHeight = 0; // Optional
+        region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        region.imageSubresource.mipLevel = 0;
+        region.imageSubresource.baseArrayLayer = 0;
+        region.imageSubresource.layerCount = 1;
+        region.imageOffset = { 0, 0, 0 };
+        region.imageExtent.width = width;
+        region.imageExtent.height = height;
+        region.imageExtent.depth = 1;
+    
+        vkCmdCopyImageToBuffer(commandBuffer, image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, buffer, 1, &region);
+    
+        endSingleTimeCommands(ctx, commandBuffer);
+    }
     
 
     void createImage(std::shared_ptr<VulkanContext> ctx, 
