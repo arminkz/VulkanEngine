@@ -117,9 +117,15 @@ bool Renderer::initialize()
     std::shared_ptr<DeviceModel> sun = std::make_shared<DeviceModel>(_ctx, sphereDMesh, sunModelMat, sunTexture, nullptr, nullptr, nullptr, sunPerlinTexture, _textureSampler);
     sun->material.sunShadeMode = 1;
     sun->updateMaterial();
-    _planetModels.push_back(sun);
+    _sunModel = sun;
     // Sun is selectable
     _selectableObjects[sun->getID()] = sun;
+
+    //Sun atmosphere
+    glm::mat4 sunAtmosphereModelMat = glm::mat4(1.f);
+    sunAtmosphereModelMat = glm::scale(sunAtmosphereModelMat, glm::vec3(sizeSun * 1.2f));
+    std::shared_ptr<AtmosphereModel> sunAtmosphere = std::make_shared<AtmosphereModel>(_ctx, sphereDMesh, sunAtmosphereModelMat, glm::vec3(1.f, 0.8f, 0.5f), 1.f, 4.0f, true);
+    _atmosphereModels.push_back(sunAtmosphere);
 
     // Mercury
     std::shared_ptr<DeviceTexture> mercuryColorTexture = std::make_shared<DeviceTexture>(_ctx, "textures/mercury/8k_mercury.jpg", VK_FORMAT_R8G8B8A8_SRGB);
@@ -170,8 +176,8 @@ bool Renderer::initialize()
     // Earth Atmosphere
     glm::mat4 earthAtmosphereModelMat = glm::mat4(1.f);
     earthAtmosphereModelMat = glm::translate(earthAtmosphereModelMat, glm::vec3(orbitRadEarth, 0.f, 0.f));
-    earthAtmosphereModelMat = glm::scale(earthAtmosphereModelMat, glm::vec3(sizeEarth * 1.015f));
-    _atmosphereModels.push_back(std::make_unique<AtmosphereModel>(_ctx, sphereDMesh, earthAtmosphereModelMat, glm::vec3(0.45f, 0.55f, 1.f)));
+    earthAtmosphereModelMat = glm::scale(earthAtmosphereModelMat, glm::vec3(sizeEarth * 1.03f));
+    _atmosphereModels.push_back(std::make_unique<AtmosphereModel>(_ctx, sphereDMesh, earthAtmosphereModelMat, glm::vec3(0.45f, 0.55f, 1.f), 3.f, 3.0, false));
 
     // Moon
     std::shared_ptr<DeviceTexture> moonColorTexture = std::make_shared<DeviceTexture>(_ctx, "textures/moon/8k_moon.jpg", VK_FORMAT_R8G8B8A8_SRGB);
@@ -303,6 +309,15 @@ bool Renderer::initialize()
     _pipeline = std::make_unique<Pipeline>(_ctx, "spv/shader_vert.spv", "spv/shader_frag.spv", pipelineParams);
 
 
+    // Create sun pipeline
+    PipelineParams sunPipelineParams {};
+    sunPipelineParams.descriptorSetLayouts = { perFrameDSL, perModelDSL };
+    sunPipelineParams.pushConstantRange = { VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConstants) };
+    sunPipelineParams.renderPass = _renderPass;
+    sunPipelineParams.msaaSamples = _msaaSamples;
+    _sunPipeline = std::make_unique<Pipeline>(_ctx, "spv/shader_vert.spv", "spv/sun_frag.spv", sunPipelineParams);
+
+
     // Create orbit pipeline
     PipelineParams orbitPipelineParams {
         { perFrameDSL },                                          //Descriptor set layout
@@ -316,14 +331,15 @@ bool Renderer::initialize()
 
 
     // Create atmosphere pipeline
-    PipelineParams atmospherePipelineParams {
-        { perFrameDSL, atmosphereDSL },                                                          //Descriptor set layout
-        { VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConstants) }, //Push constants
-        _renderPass,                                                                             //Render pass
-        _msaaSamples,
-        false,
-        false
-    };
+    PipelineParams atmospherePipelineParams {};
+    atmospherePipelineParams.descriptorSetLayouts = { perFrameDSL, atmosphereDSL };
+    atmospherePipelineParams.pushConstantRange = { VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConstants) };
+    atmospherePipelineParams.renderPass = _renderPass;
+    atmospherePipelineParams.msaaSamples = _msaaSamples;
+    atmospherePipelineParams.depthTest = true;
+    atmospherePipelineParams.depthWrite = false;
+    atmospherePipelineParams.transparency = true;
+    atmospherePipelineParams.backSide = true;
     _atmospherePipeline = std::make_unique<Pipeline>(_ctx, "spv/shader_vert.spv", "spv/atmosphere_frag.spv", atmospherePipelineParams);
 
 
@@ -332,7 +348,6 @@ bool Renderer::initialize()
     objectSelectionPipelineParams.pushConstantRange = { VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConstants) };
     objectSelectionPipelineParams.renderPass = _objectSelectionRenderPass;
     objectSelectionPipelineParams.transparency = false; // No transparency for object selection
-
     _objectSelectionPipeline = std::make_unique<Pipeline>(_ctx, "spv/shader_vert.spv", "spv/objectselect_frag.spv", objectSelectionPipelineParams);
 
 
@@ -877,9 +892,29 @@ void Renderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t image
     scissor.extent = _swapChainExtent;
     vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
-    _pipeline->bind(commandBuffer);
+    // Draw sun model
+    _sunPipeline->bind(commandBuffer);
+    VkBuffer vertexBuffers[] = {_sunModel->getDeviceMesh()->getVertexBuffer()};
+    VkDeviceSize offsets[] = {0};
+    vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets); // We can have multiple vertex buffers
+    vkCmdBindIndexBuffer(commandBuffer, _sunModel->getDeviceMesh()->getIndexBuffer(), 0, VK_INDEX_TYPE_UINT32); // We can only use one index buffer at a time
+
+    std::array<VkDescriptorSet, 2> descriptorSets = {
+        _sceneDescriptorSets[_currentFrame]->getDescriptorSet(),  // Per-frame descriptor set
+        _sunModel->getDescriptorSet()->getDescriptorSet()          // Per-model descriptor set
+    };
+    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, _sunPipeline->getPipelineLayout(), 0, 2, descriptorSets.data(), 0, nullptr);
+
+    // Push constants for model
+    PushConstants pushConstants{};
+    pushConstants.model = _sunModel->getModelMatrix();
+    pushConstants.objectID = _sunModel->getID();
+    vkCmdPushConstants(commandBuffer, _sunPipeline->getPipelineLayout(), VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConstants), &pushConstants);
+
+    vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(_sunModel->getDeviceMesh()->getIndicesCount()), 1, 0, 0, 0);
 
     // Iterate over planets
+    _pipeline->bind(commandBuffer);
     for(int m=0; m<static_cast<int>(_planetModels.size()); m++) {
         VkBuffer vertexBuffers[] = {_planetModels[m]->getDeviceMesh()->getVertexBuffer()};
         VkDeviceSize offsets[] = {0};
@@ -1076,12 +1111,12 @@ uint32_t Renderer::querySelectionImage(float mouseX, float mouseY) {
 
     _objectSelectionPipeline->bind(cmdBuffer);
 
-    // Iterate over planets (selectable objects)
-    for(int m=0; m<static_cast<int>(_planetModels.size()); m++) {
-        VkBuffer vertexBuffers[] = {_planetModels[m]->getDeviceMesh()->getVertexBuffer()};
+    // Iterate selectable objects
+    for (const auto& pair : _selectableObjects) {
+        VkBuffer vertexBuffers[] = {pair.second->getDeviceMesh()->getVertexBuffer()};
         VkDeviceSize offsets[] = {0};
         vkCmdBindVertexBuffers(cmdBuffer, 0, 1, vertexBuffers, offsets); // We can have multiple vertex buffers
-        vkCmdBindIndexBuffer(cmdBuffer, _planetModels[m]->getDeviceMesh()->getIndexBuffer(), 0, VK_INDEX_TYPE_UINT32); // We can only use one index buffer at a time
+        vkCmdBindIndexBuffer(cmdBuffer, pair.second->getDeviceMesh()->getIndexBuffer(), 0, VK_INDEX_TYPE_UINT32); // We can only use one index buffer at a time
 
         std::array<VkDescriptorSet, 1> descriptorSets = {
             _sceneDescriptorSets[_currentFrame]->getDescriptorSet()  // Per-frame descriptor set
@@ -1092,11 +1127,11 @@ uint32_t Renderer::querySelectionImage(float mouseX, float mouseY) {
 
         // Push constants for model
         PushConstants pushConstants{};
-        pushConstants.model = _planetModels[m]->getModelMatrix();
-        pushConstants.objectID = _planetModels[m]->getID();
+        pushConstants.model = pair.second->getModelMatrix();
+        pushConstants.objectID = pair.second->getID();
         vkCmdPushConstants(cmdBuffer, _objectSelectionPipeline->getPipelineLayout(), VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConstants), &pushConstants);
 
-        vkCmdDrawIndexed(cmdBuffer, static_cast<uint32_t>(_planetModels[m]->getDeviceMesh()->getIndicesCount()), 1, 0, 0, 0);
+        vkCmdDrawIndexed(cmdBuffer, static_cast<uint32_t>(pair.second->getDeviceMesh()->getIndicesCount()), 1, 0, 0, 0);
     }
 
     vkCmdEndRenderPass(cmdBuffer);
@@ -1129,7 +1164,7 @@ uint32_t Renderer::querySelectionImage(float mouseX, float mouseY) {
     // Read mouseX and mouseY pixel data
     int mousePixel = static_cast<int>(mouseX) + static_cast<int>(mouseY) * _swapChainExtent.width;
     uint32_t selectedObjectID = pixelData[mousePixel]; // Assuming the ID is stored in the first channel
-    spdlog::info("Selected object ID: {}", selectedObjectID);
+    // spdlog::info("Selected object ID: {}", selectedObjectID);
 
     // uint8_t* pixelData8 = new uint8_t[_swapChainExtent.width * _swapChainExtent.height];
     // for (size_t i = 0; i < _swapChainExtent.width * _swapChainExtent.height; ++i) {

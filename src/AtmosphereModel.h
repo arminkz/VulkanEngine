@@ -13,7 +13,10 @@ public:
         std::shared_ptr<VulkanContext> ctx,
         std::shared_ptr<DeviceMesh> mesh,
         glm::mat4 modelMatrix,
-        glm::vec3 color
+        glm::vec3 color,
+        float coeffScatter = 3.0f,
+        float powScatter = 3.0f,
+        bool isLightSource = false
     );
 
     ~AtmosphereModel();
@@ -29,6 +32,9 @@ public:
     // UBO passed to the fragment shader
     struct AtmosphereInfo {
         alignas(16) glm::vec3 color;
+        alignas(4) float coeffScatter = 3.0f;
+        alignas(4) float powScatter = 3.0f;
+        alignas(4) int isLightSource = 0;
     };
 
     const UniformBuffer<AtmosphereInfo>* getAtmosphereInfoUBO() const { return _atmosphereUBO.get(); }

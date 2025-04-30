@@ -41,12 +41,14 @@ private:
         alignas(4) uint32_t objectID;
     } _pushConstants;
 
+    std::shared_ptr<DeviceModel> _sunModel = nullptr;
     std::vector<std::shared_ptr<DeviceModel>> _planetModels;
     std::vector<std::shared_ptr<DeviceModel>> _orbitModels;
     std::vector<std::shared_ptr<AtmosphereModel>> _atmosphereModels;
 
     // Normal rendering
     std::unique_ptr<Pipeline> _pipeline;
+    std::unique_ptr<Pipeline> _sunPipeline;
     std::unique_ptr<Pipeline> _orbitPipeline;
     std::unique_ptr<Pipeline> _atmospherePipeline;
 

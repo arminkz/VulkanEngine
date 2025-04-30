@@ -28,16 +28,17 @@ layout(location = 1) out vec2 fragTexCoord;
 layout(location = 2) out vec4 worldPosition;
 layout(location = 3) out vec3 worldNormal;
 layout(location = 4) out vec3 worldTangent;
-layout(location = 5) out vec3 worldViewPosition;
-layout(location = 6) out vec3 worldViewNormal;
+layout(location = 5) out vec3 positionView;
+layout(location = 6) out vec3 normalView;
 
 void main() {
     worldPosition = pc.model * vec4(inPosition, 1.0);
     worldNormal = (pc.model * vec4(inNormal, 0.0)).xyz;
     worldTangent = (pc.model * vec4(inTangent, 0.0)).xyz;
 
-    worldViewPosition = (si.view * worldPosition).xyz;
-    worldViewNormal = (si.view * pc.model * vec4(inNormal, 0.0)).xyz;
+    mat3 normalMatrix = transpose(inverse(mat3(si.view * pc.model)));
+    normalView = normalize(normalMatrix * inNormal);
+    positionView = normalize((si.view * worldPosition).xyz);
 
     gl_Position = si.proj * si.view * worldPosition;
     fragColor = inColor;

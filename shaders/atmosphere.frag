@@ -19,6 +19,9 @@ layout(push_constant) uniform PushConstants {
 // Per-model variables that don't change a lot (set 1 is per-model descriptor set)
 layout(set = 1, binding = 0) uniform atmosphereInfo {
     vec3 color;
+    float coeffScatter;
+    float powScatter;
+    int isLightSource;
 } ai;
 
 layout(location = 0) in vec4 fragColor;
@@ -26,8 +29,8 @@ layout(location = 1) in vec2 fragTexCoord;
 layout(location = 2) in vec4 worldPosition;
 layout(location = 3) in vec3 worldNormal;
 layout(location = 4) in vec3 worldTangent;
-layout(location = 5) in vec3 worldViewPosition;
-layout(location = 6) in vec3 worldViewNormal;
+layout(location = 5) in vec3 positionView;
+layout(location = 6) in vec3 normalView;
 
 layout(location = 0) out vec4 outColor;
 
@@ -40,10 +43,13 @@ void main() {
     float normalDot = dot(worldNormal, lightDir); // Calculate the dot product between the normal and light direction
     float mixAmount = 1. / (1. + exp(-7. * (normalDot + 0.1))); // Calculate the mix amount based on the dot product
 
-    vec3 viewDir = normalize(si.cameraPosition - worldPosition.xyz);
-    float raw_intensity = clamp(1.0 - dot(viewDir, worldNormal), 0.0, 1.0);
-    float intensity = pow(raw_intensity, 7.0);
+    //vec3 viewDir = normalize(si.cameraPosition - worldPosition.xyz);
+    float raw_intensity = ai.coeffScatter * max(dot(positionView, normalView), 0.);
+    float intensity = pow(raw_intensity, ai.powScatter); // Apply the power scatter effect
 
+    if (ai.isLightSource == 1) {
+        mixAmount = 1.0; // If it's a light source, set mixAmount to 1.0
+    }
     outColor = vec4(ai.color, intensity) * mixAmount;
 }
 

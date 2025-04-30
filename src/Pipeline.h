@@ -13,6 +13,7 @@ struct PipelineParams
     bool depthTest = true;
     bool depthWrite = true;
     bool transparency = true;
+    bool backSide = false;
 };
 
 class Pipeline
