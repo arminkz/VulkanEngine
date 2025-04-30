@@ -3,7 +3,7 @@
 #include "VulkanHelper.h"
 #include "DescriptorSet.h"
 
-int DeviceModel::objectIDCounter = 1;
+int DeviceModel::objectIDCounter = 0;
 
 DeviceModel::DeviceModel(
     std::shared_ptr<VulkanContext> ctx, 

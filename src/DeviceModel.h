@@ -37,6 +37,7 @@ public:
 
     glm::mat4 getModelMatrix() const { return _modelMatrix; }
     void setModelMatrix(glm::mat4 modelMatrix) { _modelMatrix = modelMatrix; }
+    glm::vec3 getPosition() const { return glm::vec3(_modelMatrix[3]); }
 
     struct Material {
         alignas(4)  int hasBaseColorTexture;

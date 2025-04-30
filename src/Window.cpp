@@ -150,7 +150,7 @@ void Window::onMouseButtonDown(int button, float x, float y)
     if (button == SDL_BUTTON_LEFT) {
         _isMouseDown = true;
 
-        _renderer->drawSelectionImage(x, y); // Example function to draw selection image
+        _renderer->handleMouseClick(x, y); // Call the renderer's mouse click handler
     }
 }
 

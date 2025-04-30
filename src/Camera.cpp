@@ -48,3 +48,35 @@ glm::mat4 Camera::getViewMatrix() {
 glm::vec3 Camera::getPosition() {
     return _target + -1.f * _radius * _forward;
 }
+
+void Camera::setTarget(const glm::vec3& target) {
+    _target = target;
+    _viewMatrix = glm::lookAt(_target + _radius * -1.f * _forward, _target, _up);
+}
+
+void Camera::setTargetAnimated(const glm::vec3& target) {
+    _isAnimating = true;
+    _animationStartTarget = _target;
+    _animationEndTarget = target;
+    _animationDuration = 1.0f;
+    _animationElapsed = 0.0f;
+}
+
+void Camera::advanceAnimation(float deltaTime) {
+    if (_isAnimating) {
+        _animationElapsed += deltaTime;
+        float t = glm::clamp(_animationElapsed / _animationDuration, 0.0f, 1.0f);
+        float easedT = easeInOutCubic(t); // cubic easing function
+        _target = glm::mix(_animationStartTarget, _animationEndTarget, easedT);
+
+        _viewMatrix = glm::lookAt(_target + _radius * -1.f * _forward, _target, _up);
+
+        if (t >= 1.0f) {
+            _isAnimating = false;
+        }
+    }
+}
+
+float Camera::easeInOutCubic(float t) {
+    return t < 0.5f ? 4.0f * t * t * t : 1.0f - pow(-2.0f * t + 2.0f, 3.0f) / 2.0f;
+}

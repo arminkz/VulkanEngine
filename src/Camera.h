@@ -26,6 +26,11 @@ public:
     glm::mat4 getViewMatrix();
     glm::vec3 getPosition();
 
+    void setTarget(const glm::vec3& target);
+    void setTargetAnimated(const glm::vec3& target);
+
+    void advanceAnimation(float deltaTime);
+
 private:
     float _radius;
     float _minRadius;
@@ -37,4 +42,13 @@ private:
     glm::vec3 _up;
 
     glm::mat4 _viewMatrix;
+
+    // Animation state
+    bool _isAnimating = false;
+    glm::vec3 _animationStartTarget;
+    glm::vec3 _animationEndTarget;
+    float _animationDuration = 1.0f; // in seconds
+    float _animationElapsed = 0.0f;
+
+    float easeInOutCubic(float t);
 };

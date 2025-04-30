@@ -18,6 +18,8 @@ private:
     std::shared_ptr<VulkanContext> _ctx;
 
     std::unique_ptr<Camera> _camera = nullptr;
+    uint32_t _currentTargetObjectID;
+    std::unordered_map<int, std::shared_ptr<DeviceModel>> _selectableObjects;
 
     std::shared_ptr<TextureSampler> _textureSampler;
 
@@ -39,9 +41,9 @@ private:
         alignas(4) uint32_t objectID;
     } _pushConstants;
 
-    std::vector<std::unique_ptr<DeviceModel>> _planetModels;
-    std::vector<std::unique_ptr<DeviceModel>> _orbitModels;
-    std::vector<std::unique_ptr<AtmosphereModel>> _atmosphereModels;
+    std::vector<std::shared_ptr<DeviceModel>> _planetModels;
+    std::vector<std::shared_ptr<DeviceModel>> _orbitModels;
+    std::vector<std::shared_ptr<AtmosphereModel>> _atmosphereModels;
 
     // Normal rendering
     std::unique_ptr<Pipeline> _pipeline;
@@ -123,13 +125,15 @@ private:
 
     bool createSyncObjects();
 
+    uint32_t querySelectionImage(float mouseX, float mouseY);
+
 public:
     Renderer(std::shared_ptr<VulkanContext> ctx);
     ~Renderer();
 
     bool initialize();
     void drawFrame();
-    void drawSelectionImage(float mouseX, float mouseY);
+    void handleMouseClick(float mouseX, float mouseY);
     void informFramebufferResized() { _framebufferResized = true; };
 
     Camera* getCamera() { return _camera.get(); };
