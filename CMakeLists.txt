@@ -26,13 +26,15 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/$<CONFIGURATION>")
 add_subdirectory(external/spdlog)
 add_subdirectory(external/glm)
 add_subdirectory(external/SDL EXCLUDE_FROM_ALL)
+add_subdirectory(external/imgui)
 
 # Libraries
 set(LIBRARIES
+    Vulkan::Vulkan
     spdlog::spdlog
     glm::glm
     SDL3::SDL3
-    Vulkan::Vulkan
+    imgui
 )
 
 # Handle .cpp files
@@ -41,6 +43,7 @@ file(GLOB SOURCES
     src/geometry/*
     src/loader/*
     src/utilities/*
+    src/imgui-impl/*
 )
 
 # Add resources.rc file to the sources if on Windows
@@ -52,6 +55,7 @@ endif()
 set(INCLUDES ${INCLUDES} src)
 set(INCLUDES ${INCLUDES} external/stb)
 set(INCLUDES ${INCLUDES} external/tinyobjloader)
+set(INCLUDES ${INCLUDES} external/imgui)
 
 add_executable(${PROJECT_NAME} ${SOURCES})
 target_link_libraries(${PROJECT_NAME} ${LIBRARIES})

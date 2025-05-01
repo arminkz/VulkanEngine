@@ -198,7 +198,7 @@ void Pipeline::createGraphicsPipeline(const std::string& vertShaderPath, const s
     pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
     pipelineInfo.basePipelineIndex = -1;
 
-    if (vkCreateGraphicsPipelines(_ctx->device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &_pipeline) != VK_SUCCESS) {
+    if (vkCreateGraphicsPipelines(_ctx->device, _ctx->pipelineCache, 1, &pipelineInfo, nullptr, &_pipeline) != VK_SUCCESS) {
         throw std::runtime_error("Failed to create graphics pipeline!");
     }else {
         spdlog::info("Graphics pipeline created successfully");

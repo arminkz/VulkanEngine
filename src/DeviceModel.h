@@ -12,6 +12,7 @@ class DeviceModel
 {
 public:
     DeviceModel(
+        std::string name,
         std::shared_ptr<VulkanContext> ctx, 
         std::shared_ptr<DeviceMesh> mesh,
         glm::mat4 modelMatrix,
@@ -61,6 +62,7 @@ public:
 private:
     static int objectIDCounter;
     int _objectID;
+    std::string _name;
 
     std::shared_ptr<VulkanContext> _ctx;
     

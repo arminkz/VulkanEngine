@@ -96,18 +96,18 @@ static SwapChainSupportDetails querySwapChainSupport(VkPhysicalDevice phyDevice,
 
 namespace VulkanHelper {
 
-    VkCommandBuffer beginSingleTimeCommands(std::shared_ptr<VulkanContext> ctx);
-    void endSingleTimeCommands(std::shared_ptr<VulkanContext> ctx, VkCommandBuffer commandBuffer);
+    VkCommandBuffer beginSingleTimeCommands(const std::shared_ptr<VulkanContext>& ctx);
+    void endSingleTimeCommands(const std::shared_ptr<VulkanContext>& ctx, VkCommandBuffer commandBuffer);
 
-    uint32_t findMemoryType(std::shared_ptr<VulkanContext> ctx, uint32_t typeFilter, VkMemoryPropertyFlags properties);
+    uint32_t findMemoryType(const std::shared_ptr<VulkanContext>& ctx, uint32_t typeFilter, VkMemoryPropertyFlags properties);
 
-    void createBuffer(std::shared_ptr<VulkanContext> ctx, VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory);
-    void copyBuffer(std::shared_ptr<VulkanContext> ctx, VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
-    void copyBufferToImage(std::shared_ptr<VulkanContext> ctx, VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
-    void copyImageToBuffer(std::shared_ptr<VulkanContext> ctx, VkImage image, VkBuffer buffer, uint32_t width, uint32_t height);
+    void createBuffer(const std::shared_ptr<VulkanContext>& ctx, VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory);
+    void copyBuffer(const std::shared_ptr<VulkanContext>& ctx, VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
+    void copyBufferToImage(const std::shared_ptr<VulkanContext>& ctx, VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
+    void copyImageToBuffer(const std::shared_ptr<VulkanContext>& ctx, VkImage image, VkBuffer buffer, uint32_t width, uint32_t height);
     
-    void createImage(std::shared_ptr<VulkanContext> ctx, uint32_t width, uint32_t height, VkFormat format, uint32_t mipLevels, VkSampleCountFlagBits numSamples, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory);
-    VkImageView createImageView(std::shared_ptr<VulkanContext> ctx, VkImage image, VkFormat format, uint32_t mipLevels, VkImageAspectFlags aspectFlags);
-    void transitionImageLayout(std::shared_ptr<VulkanContext> ctx, VkImage image, VkFormat format, uint32_t mipLevels, VkImageLayout oldLayout, VkImageLayout newLayout);
+    void createImage(const std::shared_ptr<VulkanContext>& ctx, uint32_t width, uint32_t height, VkFormat format, uint32_t mipLevels, VkSampleCountFlagBits numSamples, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory);
+    VkImageView createImageView(const std::shared_ptr<VulkanContext>& ctx, VkImage image, VkFormat format, uint32_t mipLevels, VkImageAspectFlags aspectFlags);
+    void transitionImageLayout(const std::shared_ptr<VulkanContext>& ctx, VkImage image, VkFormat format, uint32_t mipLevels, VkImageLayout oldLayout, VkImageLayout newLayout);
     
 }

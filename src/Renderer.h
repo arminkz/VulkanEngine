@@ -97,11 +97,6 @@ private:
     VkImageView _objectSelectionDepthImageView;
     void createObjectSelectionDepthResources();
 
-
-
-
-
-
     std::vector<VkCommandBuffer> _commandBuffers;
 
     std::vector<VkSemaphore> _imageAvailableSemaphores;

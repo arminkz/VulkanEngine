@@ -10,10 +10,14 @@ Window::Window()
 
 Window::~Window()
 {
+    spdlog::info("Window is getting destroyed...");
     // Clean up the renderer
     if (_renderer) {
         _renderer = nullptr;
     }
+
+    // Clean up the Vulkan context
+    _ctx = nullptr;
 
     // Cleanup SDL resources
     SDL_DestroyWindow(_window);
@@ -30,7 +34,7 @@ bool Window::initialize(const std::string& title, const uint16_t width, const ui
     }
 
     // Create the window
-    _window = SDL_CreateWindow(title.c_str(), width, height, SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
+    _window = SDL_CreateWindow(title.c_str(), width, height, SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY );
     if (!_window) {
         const char* error = SDL_GetError();
         spdlog::error("SDL_CreateWindow Error: {}", (error[0] ? error : "Unknown error"));

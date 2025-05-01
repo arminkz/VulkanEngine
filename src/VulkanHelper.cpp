@@ -3,7 +3,7 @@
 
 namespace VulkanHelper {
 
-    VkCommandBuffer beginSingleTimeCommands(std::shared_ptr<VulkanContext> ctx) {
+    VkCommandBuffer beginSingleTimeCommands(const std::shared_ptr<VulkanContext>& ctx) {
         VkCommandBufferAllocateInfo allocInfo = {};
         allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
         allocInfo.commandPool = ctx->commandPool;
@@ -21,7 +21,7 @@ namespace VulkanHelper {
         return commandBuffer;
     }
 
-    void endSingleTimeCommands(std::shared_ptr<VulkanContext> ctx, VkCommandBuffer commandBuffer) {
+    void endSingleTimeCommands(const std::shared_ptr<VulkanContext>& ctx, VkCommandBuffer commandBuffer) {
         vkEndCommandBuffer(commandBuffer);
 
         VkSubmitInfo submitInfo = {};
@@ -36,7 +36,7 @@ namespace VulkanHelper {
     }
 
 
-    uint32_t findMemoryType(std::shared_ptr<VulkanContext> ctx, uint32_t typeFilter, VkMemoryPropertyFlags properties) {
+    uint32_t findMemoryType(const std::shared_ptr<VulkanContext>& ctx, uint32_t typeFilter, VkMemoryPropertyFlags properties) {
         VkPhysicalDeviceMemoryProperties memProperties;
         vkGetPhysicalDeviceMemoryProperties(ctx->physicalDevice, &memProperties);
     
@@ -50,7 +50,7 @@ namespace VulkanHelper {
     }
 
 
-    void createBuffer(std::shared_ptr<VulkanContext> ctx, 
+    void createBuffer(const std::shared_ptr<VulkanContext>& ctx, 
                       VkDeviceSize size, 
                       VkBufferUsageFlags usage, 
                       VkMemoryPropertyFlags properties, 
@@ -87,7 +87,7 @@ namespace VulkanHelper {
     }
 
 
-    void copyBuffer(std::shared_ptr<VulkanContext> ctx, 
+    void copyBuffer(const std::shared_ptr<VulkanContext>& ctx, 
                     VkBuffer srcBuffer, 
                     VkBuffer dstBuffer, 
                     VkDeviceSize size) 
@@ -106,7 +106,7 @@ namespace VulkanHelper {
     }
 
 
-    void copyBufferToImage(std::shared_ptr<VulkanContext> ctx, 
+    void copyBufferToImage(const std::shared_ptr<VulkanContext>& ctx, 
                            VkBuffer buffer, 
                            VkImage image, 
                            uint32_t width, 
@@ -132,7 +132,7 @@ namespace VulkanHelper {
         endSingleTimeCommands(ctx, commandBuffer);
     }
 
-    void copyImageToBuffer(std::shared_ptr<VulkanContext> ctx, 
+    void copyImageToBuffer(const std::shared_ptr<VulkanContext>& ctx, 
                            VkImage image, 
                            VkBuffer buffer, 
                            uint32_t width, 
@@ -159,7 +159,7 @@ namespace VulkanHelper {
     }
     
 
-    void createImage(std::shared_ptr<VulkanContext> ctx, 
+    void createImage(const std::shared_ptr<VulkanContext>& ctx, 
                      uint32_t width,
                      uint32_t height,
                      VkFormat format,
@@ -207,7 +207,7 @@ namespace VulkanHelper {
     }
 
 
-    VkImageView createImageView(std::shared_ptr<VulkanContext> ctx, 
+    VkImageView createImageView(const std::shared_ptr<VulkanContext>& ctx, 
                                 VkImage image, 
                                 VkFormat format, 
                                 uint32_t mipLevels, 
@@ -233,7 +233,7 @@ namespace VulkanHelper {
     }
 
 
-    void transitionImageLayout(std::shared_ptr<VulkanContext> ctx, 
+    void transitionImageLayout(const std::shared_ptr<VulkanContext>& ctx, 
                                VkImage image, 
                                VkFormat format, 
                                uint32_t mipLevels, 

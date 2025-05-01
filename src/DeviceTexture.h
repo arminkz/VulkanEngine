@@ -20,6 +20,7 @@ public:
 
     // Singleton pattern for dummy texture
     static DeviceTexture* getDummy(std::shared_ptr<VulkanContext> ctx);
+    static void cleanupDummy();
 
 private:
     std::shared_ptr<VulkanContext> _ctx;
@@ -34,4 +35,6 @@ private:
     VkImageView _textureImageView;
     
     void generateMipmaps();
+
+    static DeviceTexture* dummyTexture;
 };

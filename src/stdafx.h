@@ -19,9 +19,10 @@
 #include "glm/gtc/matrix_transform.hpp"
 #include <glm/gtx/hash.hpp>
 
-// [STB]
-//#include "stb_image.h"
-
+// [ImGui]
+#include "imgui.h"
+#include "imgui-impl/imgui_impl_sdl3.h"
+#include "imgui-impl/imgui_impl_vulkan.h"
 
 // [Standard libraries: basic]
 #include <algorithm>

@@ -10,8 +10,6 @@ DeviceMesh::DeviceMesh(std::shared_ptr<VulkanContext> ctx, const HostMesh& mesh)
 }
 
 DeviceMesh::~DeviceMesh() {
-    spdlog::info("GPU Mesh getting destroyed...");
-
     vkDestroyBuffer(_ctx->device, _vertexBuffer, nullptr);
     vkFreeMemory(_ctx->device, _vertexBufferMemory, nullptr);
 

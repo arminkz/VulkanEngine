@@ -21,6 +21,8 @@ public:
     VkQueue graphicsQueue;
     VkQueue presentQueue;
 
+    VkPipelineCache pipelineCache = VK_NULL_HANDLE;
+
     VkDescriptorPool descriptorPool;
     VkCommandPool commandPool;
 
@@ -45,6 +47,12 @@ private:
         void* pUserData);
 
     bool isDeviceSuitable(VkPhysicalDevice device);
+
+    bool isInstanceLayerAvailable(const char* layerName);
+    bool isInstanceExtensionAvailable(const char* extensionName);
+
+    void loadPipelineCache(const std::string& filename);
+    void savePipelineCache(const std::string& filename);
 
     void printVulkanInfo();
 };

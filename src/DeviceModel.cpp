@@ -6,6 +6,7 @@
 int DeviceModel::objectIDCounter = 0;
 
 DeviceModel::DeviceModel(
+    std::string name,
     std::shared_ptr<VulkanContext> ctx, 
     std::shared_ptr<DeviceMesh> mesh,
     glm::mat4 modelMatrix,
@@ -16,7 +17,8 @@ DeviceModel::DeviceModel(
     std::shared_ptr<DeviceTexture> overlayColorTexture,
     std::shared_ptr<TextureSampler> textureSampler
 )
-    : _ctx(std::move(ctx))
+    : _name(name)
+    , _ctx(std::move(ctx))
     , _objectID(++objectIDCounter)
     , _mesh(std::move(mesh))
     , _baseColorTexture(std::move(baseColorTexture))

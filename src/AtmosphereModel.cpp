@@ -8,7 +8,7 @@ AtmosphereModel::AtmosphereModel(std::shared_ptr<VulkanContext> ctx,
     float coeffScatter, 
     float powScatter, 
     bool isLightSource)
-    
+
     : _ctx(std::move(ctx)), _mesh(std::move(mesh)), _modelMatrix(modelMatrix), _color(color)
 {
     // Create UBO for atmosphere information

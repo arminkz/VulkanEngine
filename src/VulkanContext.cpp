@@ -1,4 +1,5 @@
 #include "VulkanContext.h"
+#include "OSHelper.h"
 
 VulkanContext::VulkanContext(SDL_Window* window)
     : window(window)
@@ -10,12 +11,16 @@ VulkanContext::VulkanContext(SDL_Window* window)
     createLogicalDevice();
     createDescriptorPool();
     createCommandPool();
+    loadPipelineCache("pipeline_cache.bin");
 }
 
 VulkanContext::~VulkanContext() {
+    // Save the pipeline cache to a file
+    savePipelineCache("pipeline_cache.bin");
     spdlog::info("Destroying Vulkan context...");
     vkDestroyCommandPool(device, commandPool, nullptr);
     vkDestroyDescriptorPool(device, descriptorPool, nullptr);
+    vkDestroyPipelineCache(device, pipelineCache, nullptr);
     vkDestroyDevice(device, nullptr);
     vkDestroySurfaceKHR(instance, surface, nullptr);
 
@@ -44,25 +49,10 @@ void VulkanContext::createVulkanInstance() {
     instanceCreateInfo.pApplicationInfo = &appInfo;
 
     // Check for validation layer support
-    uint32_t layerCount;
-    vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
-    std::vector<VkLayerProperties> availableLayers(layerCount);
-    vkEnumerateInstanceLayerProperties(&layerCount, availableLayers.data());
-    const char* validationLayers[] = { "VK_LAYER_KHRONOS_validation" };
-    for (const char* layerName : validationLayers) {
-        bool layerFound = false;
-        for (const auto& layerProperties : availableLayers) {
-            if (strcmp(layerName, layerProperties.layerName) == 0) {
-                layerFound = true;
-                break;
-            }
-        }
-        if (!layerFound) {
-            _validationLayersAvailable = false;
-        }
-    }
-
-    if (_validationLayersAvailable) {
+    _validationLayersAvailable = isInstanceLayerAvailable("VK_LAYER_KHRONOS_validation");
+    if (!_validationLayersAvailable) {
+        spdlog::warn("Validation layers not available, disabling validation layers.");
+    }else {
         const uint32_t validationLayerCount = 1;
         const char* validationLayers[] = { "VK_LAYER_KHRONOS_validation" };
         instanceCreateInfo.ppEnabledLayerNames = validationLayers;
@@ -70,17 +60,29 @@ void VulkanContext::createVulkanInstance() {
     }
 
     // Required extensions 
-    // Get the required extensions for the SDL + Debug Utils
+    // SDL extensions
     uint32_t sdlExtensionCount = 0;
     const char * const *sdlExtensionsRaw = SDL_Vulkan_GetInstanceExtensions(&sdlExtensionCount);
-    std::vector<const char*> requiredExtensions(sdlExtensionCount + 1);
-    requiredExtensions[0] = VK_EXT_DEBUG_UTILS_EXTENSION_NAME; // Add the surface extension to the list
-    for (uint32_t i = 0; i < sdlExtensionCount; ++i) {
-        requiredExtensions[i+1] = sdlExtensionsRaw[i];
+    std::vector<const char*> requiredExtensions(sdlExtensionsRaw, sdlExtensionsRaw + sdlExtensionCount);
+
+    // Debug Utils extension
+    if(!isInstanceExtensionAvailable(VK_EXT_DEBUG_UTILS_EXTENSION_NAME)) {
+        spdlog::warn("Debug Utils extension not available!");
+    }else {
+        requiredExtensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
     }
+
+    // Other extensions can be added here as needed
+    if(!isInstanceExtensionAvailable(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME)) {
+        spdlog::warn("VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME not available!");
+    }else {
+        requiredExtensions.push_back(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
+    }
+
     instanceCreateInfo.enabledExtensionCount = static_cast<uint32_t>(requiredExtensions.size());
     instanceCreateInfo.ppEnabledExtensionNames = requiredExtensions.data();
 
+    // Create Vulkan instance
     VkResult result = vkCreateInstance(&instanceCreateInfo, nullptr, &instance);
     if (result != VK_SUCCESS) {
         throw std::runtime_error("Failed to create Vulkan instance!");
@@ -210,6 +212,7 @@ void VulkanContext::createLogicalDevice() {
 }
 
 void VulkanContext::createDescriptorPool() {
+
     // Descriptor usage counts per type
     uint32_t totalUBOs = 100;
     uint32_t totalSamplers = 70;
@@ -276,6 +279,34 @@ bool VulkanContext::isDeviceSuitable(VkPhysicalDevice device) {
     return isDiscreteGPU && hasRequiredExtensions && swapChainAdequate;
 }
 
+bool VulkanContext::isInstanceLayerAvailable(const char* layerName) {
+    uint32_t layerCount;
+    vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
+    std::vector<VkLayerProperties> availableLayers(layerCount);
+    vkEnumerateInstanceLayerProperties(&layerCount, availableLayers.data());
+
+    for (const auto& layer : availableLayers) {
+        if (strcmp(layerName, layer.layerName) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool VulkanContext::isInstanceExtensionAvailable(const char* extensionName) {
+    uint32_t extensionCount;
+    vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr);
+    std::vector<VkExtensionProperties> availableExtensions(extensionCount);
+    vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, availableExtensions.data());
+
+    for (const auto& extension : availableExtensions) {
+        if (strcmp(extensionName, extension.extensionName) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
 
 VKAPI_ATTR VkBool32 VKAPI_CALL VulkanContext::debugCallback(
     VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
@@ -286,6 +317,49 @@ VKAPI_ATTR VkBool32 VKAPI_CALL VulkanContext::debugCallback(
     spdlog::error("{}", pCallbackData->pMessage);
 
     return VK_FALSE;
+}
+
+void VulkanContext::loadPipelineCache(const std::string& filename) {
+    std::ifstream file(OSHelper::getExecutableDir() + filename, std::ios::binary | std::ios::ate);
+    std::vector<char> cacheData;
+    if (file.is_open()) {
+        size_t size = static_cast<size_t>(file.tellg());
+        cacheData.resize(size);
+        file.seekg(0);
+        file.read(cacheData.data(), size);
+        file.close();
+
+        VkPipelineCacheCreateInfo cacheCreateInfo{};
+        cacheCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO;
+        cacheCreateInfo.initialDataSize = size;
+        cacheCreateInfo.pInitialData = cacheData.data();
+
+        if (vkCreatePipelineCache(device, &cacheCreateInfo, nullptr, &pipelineCache) != VK_SUCCESS) {
+            throw std::runtime_error("Failed to create pipeline cache from file.");
+        }
+        spdlog::info("Pipeline cache loaded from file: {}", filename);
+    } else {
+        spdlog::warn("No pipeline cache file found, creating a new one.");
+        VkPipelineCacheCreateInfo cacheCreateInfo{};
+        cacheCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO;
+        vkCreatePipelineCache(device, &cacheCreateInfo, nullptr, &pipelineCache);
+    }
+}
+
+void VulkanContext::savePipelineCache(const std::string& filename) {
+    size_t dataSize = 0;
+    vkGetPipelineCacheData(device, pipelineCache, &dataSize, nullptr);
+    std::vector<char> cacheData(dataSize);
+    vkGetPipelineCacheData(device, pipelineCache, &dataSize, cacheData.data());
+
+    std::ofstream file(OSHelper::getExecutableDir() + filename, std::ios::binary);
+    if (file.is_open()) {
+        file.write(cacheData.data(), dataSize);
+        file.close();
+        spdlog::info("Pipeline cache saved to file: {}", filename);
+    } else {
+        spdlog::error("Failed to save pipeline cache to file: {}", filename);
+    }
 }
 
 void VulkanContext::printVulkanInfo() {
