@@ -1,5 +1,8 @@
 #include "GUI.h"
+#include "VulkanHelper.h"
 
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "stb_image_write.h"
 
 GUI::GUI(std::shared_ptr<VulkanContext> ctx)
     : _ctx(std::move(ctx))
@@ -7,14 +10,16 @@ GUI::GUI(std::shared_ptr<VulkanContext> ctx)
     // Setup Dear ImGui context
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
+    ImGui::StyleColorsDark();
+
     ImGuiIO& io = ImGui::GetIO(); (void)io;
-    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
-    io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;     // Enable Gamepad Controls
+    io.FontGlobalScale = _scaleFactor; // Scale all fonts by this factor
+    ImGuiStyle& style = ImGui::GetStyle();
+    style.ScaleAllSizes(_scaleFactor); // Scale all sizes by this factor
+
     // io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;         // Enable Docking
     // io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;       // Enable Multi-Viewport / Platform Windows
 
-    // Setup Dear ImGui style
-    ImGui::StyleColorsDark();
 
     // Setup Platform/Renderer bindings
     ImGui_ImplSDL3_InitForVulkan(_ctx->window);
@@ -25,17 +30,280 @@ GUI::GUI(std::shared_ptr<VulkanContext> ctx)
     // init_info.Device = _ctx->device;
     // init_info.QueueFamily = 0; // TODO: Get the correct queue family index
     // init_info.Queue = _ctx->graphicsQueue;
-
-
-
+    // init_info.PipelineCache = _ctx->pipelineCache;
+    // init_info.DescriptorPool = _ctx->descriptorPool;
+    // init_info.RenderPass = VK_NULL_HANDLE; // TODO: Set the correct render pass
+    // init_info.Subpass = 0;
+    // init_info.MinImageCount = 2; // Minimum number of images in the swapchain
 }
 
 
 GUI::~GUI()
 {
-    // Cleanup
-    // ImGui_ImplVulkan_Shutdown();
-    // ImGui_ImplSDL3_Shutdown();
-    // ImGui::DestroyContext();
-    _ctx = nullptr;
+    //ImGui_ImplVulkan_Shutdown();
+    ImGui_ImplSDL3_Shutdown();
+    ImGui::DestroyContext();
+
+    //Destroy vertex and index buffers
+    if (_vertexBuffer != VK_NULL_HANDLE) {
+        vkUnmapMemory(_ctx->device, _vertexBufferMemory);
+        vkDestroyBuffer(_ctx->device, _vertexBuffer, nullptr);
+        vkFreeMemory(_ctx->device, _vertexBufferMemory, nullptr);
+    }
+    if (_indexBuffer != VK_NULL_HANDLE) {
+        vkUnmapMemory(_ctx->device, _indexBufferMemory);
+        vkDestroyBuffer(_ctx->device, _indexBuffer, nullptr);
+        vkFreeMemory(_ctx->device, _indexBufferMemory, nullptr);
+    }
+}
+
+void GUI::init(float width, float height)
+{
+    // Color scheme
+    // vulkanStyle = ImGui::GetStyle();
+    // vulkanStyle.Colors[ImGuiCol_TitleBg] = ImVec4(1.0f, 0.0f, 0.0f, 0.6f);
+    // vulkanStyle.Colors[ImGuiCol_TitleBgActive] = ImVec4(1.0f, 0.0f, 0.0f, 0.8f);
+    // vulkanStyle.Colors[ImGuiCol_MenuBarBg] = ImVec4(1.0f, 0.0f, 0.0f, 0.4f);
+    // vulkanStyle.Colors[ImGuiCol_Header] = ImVec4(1.0f, 0.0f, 0.0f, 0.4f);
+    // vulkanStyle.Colors[ImGuiCol_CheckMark] = ImVec4(0.0f, 1.0f, 0.0f, 1.0f);
+
+    // ImGuiStyle& style = ImGui::GetStyle();
+    // style = vulkanStyle;
+    
+    // Dimensions
+    ImGuiIO& io = ImGui::GetIO();
+    io.DisplaySize = ImVec2(width, height);
+    io.DisplayFramebufferScale = ImVec2(1.0f, 1.0f);
+}
+
+void GUI::initResources(VkRenderPass renderPass, VkSampleCountFlagBits msaaSamples)
+{
+    ImGuiIO& io = ImGui::GetIO();
+
+    // Get font atlas data from ImGui
+    unsigned char* fontData;
+    int texWidth, texHeight;
+    io.Fonts->GetTexDataAsRGBA32(&fontData, &texWidth, &texHeight);
+    
+    // Create device texture for font atlas
+    _fontTexture = std::make_unique<DeviceTexture>(_ctx, fontData, texWidth, texHeight, VK_FORMAT_R8G8B8A8_UNORM, 1);
+
+    // Create texture sampler for font atlas
+    _textureSampler = std::make_unique<TextureSampler>(_ctx, 1);
+
+    // Descriptor set layout
+    std::vector<Descriptor> descriptors = {
+        Descriptor(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 1, _fontTexture->getDescriptorInfo(_textureSampler->getSampler())) // Font texture
+    };
+    _descriptorSet = std::make_unique<DescriptorSet>(_ctx, descriptors);
+
+    // PushConstants
+    VkPushConstantRange pcRange{ VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PushConstBlock) };
+
+    // ImGui Needs its own pipeline
+    PipelineParams imguiPipelineParams;
+    imguiPipelineParams.name = "ImGui";
+    imguiPipelineParams.descriptorSetLayouts = { _descriptorSet->getDescriptorSetLayout() };
+    imguiPipelineParams.pushConstantRange = pcRange;
+    imguiPipelineParams.renderPass = renderPass;
+
+    imguiPipelineParams.cullMode = VK_CULL_MODE_NONE;
+    imguiPipelineParams.blendEnable = true;
+    imguiPipelineParams.depthTest = false;
+    imguiPipelineParams.depthWrite = false;
+    imguiPipelineParams.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
+    imguiPipelineParams.msaaSamples = msaaSamples;
+
+    // Vertex bindings and attributes
+    VkVertexInputBindingDescription bindingDescription{};
+    bindingDescription.binding = 0;
+    bindingDescription.stride = sizeof(ImDrawVert);
+    bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+
+    std::vector<VkVertexInputAttributeDescription> attributeDescriptions(3);
+    attributeDescriptions[0].binding = 0;
+    attributeDescriptions[0].location = 0;
+    attributeDescriptions[0].format = VK_FORMAT_R32G32_SFLOAT;
+    attributeDescriptions[0].offset = offsetof(ImDrawVert, pos);
+
+    attributeDescriptions[1].binding = 0;
+    attributeDescriptions[1].location = 1;
+    attributeDescriptions[1].format = VK_FORMAT_R32G32_SFLOAT;
+    attributeDescriptions[1].offset = offsetof(ImDrawVert, uv);
+
+    attributeDescriptions[2].binding = 0;
+    attributeDescriptions[2].location = 2;
+    attributeDescriptions[2].format = VK_FORMAT_R8G8B8A8_UNORM;
+    attributeDescriptions[2].offset = offsetof(ImDrawVert, col);
+
+    imguiPipelineParams.vertexBindingDescription = bindingDescription;
+    imguiPipelineParams.vertexAttributeDescriptions = attributeDescriptions;
+
+    // Create pipeline
+    _pipeline = std::make_unique<Pipeline>(_ctx, "spv/imgui_vert.spv", "spv/imgui_frag.spv", imguiPipelineParams);
+}
+
+void GUI::newFrame()
+{
+    //ImGui_ImplVulkan_NewFrame();
+    //ImGui_ImplSDL3_NewFrame();
+    ImGui::NewFrame();
+
+    // ImGui::SetWindowPos(ImVec2(20 * _scaleFactor, 20 * _scaleFactor), ImGuiCond_FirstUseEver);
+    // ImGui::SetWindowSize(ImVec2(300 * _scaleFactor, 300 * _scaleFactor), ImGuiCond_Always);
+    // ImGui::TextUnformatted("Vulkan Engine");
+    // ImGui::Begin("Example settings");
+    // ImGui::End();
+
+    ImGui::ShowDemoWindow();
+
+    ImGui::Render();
+}
+
+
+void GUI::updateBuffers()
+{
+    ImDrawData* drawData = ImGui::GetDrawData();
+
+    VkDeviceSize vertexBufferSize = drawData->TotalVtxCount * sizeof(ImDrawVert);
+    VkDeviceSize indexBufferSize = drawData->TotalIdxCount * sizeof(ImDrawIdx);
+
+    if ((vertexBufferSize == 0) || (indexBufferSize == 0)) {
+        return;
+    }
+
+    // Vertex buffer
+    if ((_vertexBuffer == VK_NULL_HANDLE) || (_vertexCount != drawData->TotalVtxCount)) {
+
+        // Unmap and destroy the old buffer memory if it exists
+        if (_vertexBuffer != VK_NULL_HANDLE) {
+            vkUnmapMemory(_ctx->device, _vertexBufferMemory);
+            _vertexBufferMapped = nullptr;
+            vkDestroyBuffer(_ctx->device, _vertexBuffer, nullptr);
+            vkFreeMemory(_ctx->device, _vertexBufferMemory, nullptr);
+        }
+
+        // Create a new vertex buffer
+        VulkanHelper::createBuffer(_ctx, vertexBufferSize, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, _vertexBuffer, _vertexBufferMemory);
+        _vertexCount = drawData->TotalVtxCount;
+
+        // Map the buffer memory
+        vkMapMemory(_ctx->device, _vertexBufferMemory, 0, vertexBufferSize, 0, &_vertexBufferMapped);
+    }
+
+    // Index buffer
+    if ((_indexBuffer == VK_NULL_HANDLE) || (_indexCount != drawData->TotalIdxCount)) {
+
+        // Unmap and destroy the old buffer memory if it exists
+        if (_indexBuffer != VK_NULL_HANDLE) {
+            vkUnmapMemory(_ctx->device, _indexBufferMemory);
+            _indexBufferMapped = nullptr;
+            vkDestroyBuffer(_ctx->device, _indexBuffer, nullptr);
+            vkFreeMemory(_ctx->device, _indexBufferMemory, nullptr);
+        }
+
+        // Create a new index buffer
+        VulkanHelper::createBuffer(_ctx, 
+            indexBufferSize, 
+            VK_BUFFER_USAGE_INDEX_BUFFER_BIT, 
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, 
+            _indexBuffer, _indexBufferMemory);
+        _indexCount = drawData->TotalIdxCount;
+
+        // Map the buffer memory
+        vkMapMemory(_ctx->device, _indexBufferMemory, 0, indexBufferSize, 0, &_indexBufferMapped);
+    }
+
+    // Upload data
+    ImDrawVert* vtxDst = (ImDrawVert*)_vertexBufferMapped;
+    ImDrawIdx* idxDst = (ImDrawIdx*)_indexBufferMapped;
+
+    for (int n = 0; n < drawData->CmdListsCount; n++) {
+        const ImDrawList* cmd_list = drawData->CmdLists[n];
+        memcpy(vtxDst, cmd_list->VtxBuffer.Data, cmd_list->VtxBuffer.Size * sizeof(ImDrawVert));
+        memcpy(idxDst, cmd_list->IdxBuffer.Data, cmd_list->IdxBuffer.Size * sizeof(ImDrawIdx));
+        vtxDst += cmd_list->VtxBuffer.Size;
+        idxDst += cmd_list->IdxBuffer.Size;
+    }
+
+    // Flush to make writes visible to GPU
+    // this is not needed if using VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
+
+    // VkMappedMemoryRange mappedRangeVtx = {};
+	// mappedRangeVtx.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
+	// mappedRangeVtx.memory = _vertexBufferMemory;
+	// mappedRangeVtx.offset = 0;
+	// mappedRangeVtx.size = VK_WHOLE_SIZE;
+	// vkFlushMappedMemoryRanges(_ctx->device, 1, &mappedRangeVtx);
+
+    // VkMappedMemoryRange mappedRangeIdx = {};
+    // mappedRangeIdx.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
+    // mappedRangeIdx.memory = _indexBufferMemory;
+    // mappedRangeIdx.offset = 0;
+    // mappedRangeIdx.size = VK_WHOLE_SIZE;
+    // vkFlushMappedMemoryRanges(_ctx->device, 1, &mappedRangeIdx);
+}
+
+void GUI::drawFrame(VkCommandBuffer commandBuffer) {
+
+    ImGuiIO& io = ImGui::GetIO();
+
+    _pipeline->bind(commandBuffer);
+
+    std::array<VkDescriptorSet, 1> descriptorSets = { _descriptorSet->getDescriptorSet() };
+    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, _pipeline->getPipelineLayout(), 0, 1, descriptorSets.data(), 0, nullptr);
+
+    VkViewport viewport{};
+    viewport.x = 0.0f;
+    viewport.y = 0.0f;
+    viewport.width = ImGui::GetIO().DisplaySize.x;
+    viewport.height = ImGui::GetIO().DisplaySize.y;
+    viewport.minDepth = 0.0f;
+    viewport.maxDepth = 1.0f;
+    vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
+
+    // UI scale and translate via push constants
+    pushConstBlock.scale = glm::vec2(2.0f / io.DisplaySize.x, 2.0f / io.DisplaySize.y);
+    pushConstBlock.translate = glm::vec2(-1.0f);
+    vkCmdPushConstants(commandBuffer, _pipeline->getPipelineLayout(), VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PushConstBlock), &pushConstBlock);
+
+    // Render commands
+    ImDrawData* imDrawData = ImGui::GetDrawData();
+    int32_t vertexOffset = 0;
+    int32_t indexOffset = 0;
+
+    if (imDrawData->CmdListsCount > 0) {
+
+        VkDeviceSize offsets[1] = { 0 };
+        vkCmdBindVertexBuffers(commandBuffer, 0, 1, &_vertexBuffer, offsets);
+        vkCmdBindIndexBuffer(commandBuffer, _indexBuffer, 0, VK_INDEX_TYPE_UINT16);
+
+        for (int32_t i = 0; i < imDrawData->CmdListsCount; i++)
+        {
+            const ImDrawList* cmd_list = imDrawData->CmdLists[i];
+            for (int32_t j = 0; j < cmd_list->CmdBuffer.Size; j++)
+            {
+                const ImDrawCmd* pcmd = &cmd_list->CmdBuffer[j];
+                VkRect2D scissorRect;
+                scissorRect.offset.x = std::max((int32_t)(pcmd->ClipRect.x), 0);
+                scissorRect.offset.y = std::max((int32_t)(pcmd->ClipRect.y), 0);
+                scissorRect.extent.width = (uint32_t)(pcmd->ClipRect.z - pcmd->ClipRect.x);
+                scissorRect.extent.height = (uint32_t)(pcmd->ClipRect.w - pcmd->ClipRect.y);
+                vkCmdSetScissor(commandBuffer, 0, 1, &scissorRect);
+                vkCmdDrawIndexed(commandBuffer, pcmd->ElemCount, 1, indexOffset, vertexOffset, 0);
+                indexOffset += pcmd->ElemCount;
+            }
+            vertexOffset += cmd_list->VtxBuffer.Size;
+        }
+    }
+}
+
+bool GUI::handleEvents(SDL_Event* event) {
+    return ImGui_ImplSDL3_ProcessEvent(event);
+}
+
+bool GUI::isCapturingEvent()
+{
+    ImGuiIO& io = ImGui::GetIO();
+    return io.WantCaptureMouse || io.WantCaptureKeyboard;
 }

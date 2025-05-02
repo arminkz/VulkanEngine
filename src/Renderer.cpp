@@ -3,14 +3,12 @@
 #include "VulkanHelper.h"
 
 #include "Pipeline.h"
+#include "GUI.h"
 #include "loader/ObjLoader.h"
 #include "geometry/Vertex.h"
 #include "geometry/HostMesh.h"
 #include "geometry/DeviceMesh.h"
 #include "geometry/MeshFactory.h"
-
-#define STB_IMAGE_WRITE_IMPLEMENTATION
-#include "stb_image_write.h"
 
 Renderer::Renderer(std::shared_ptr<VulkanContext> ctx)
     : _ctx(std::move(ctx))
@@ -293,6 +291,11 @@ bool Renderer::initialize()
     createRenderPass();
     createObjectSelectionRenderPass();
 
+    // Create ImGUI
+    _gui = std::make_unique<GUI>(_ctx);
+    _gui->init(_swapChainExtent.width, _swapChainExtent.height);
+    _gui->initResources(_renderPass, _msaaSamples);
+
     // Create per-frame descriptor sets
     for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
         std::vector<Descriptor> perSceneDescriptors = {
@@ -305,56 +308,54 @@ bool Renderer::initialize()
     VkDescriptorSetLayout perFrameDSL = _sceneDescriptorSets[0]->getDescriptorSetLayout();
     VkDescriptorSetLayout atmosphereDSL = _atmosphereModels[0]->getDescriptorSet()->getDescriptorSetLayout();
 
-    // Create graphics pipeline
-    PipelineParams pipelineParams {
-        { perFrameDSL, perModelDSL },
-        { VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConstants) },
-        _renderPass,
-        _msaaSamples,
-        true,
-        true,
-
-    };
+    // Pipeline for general planets
+    PipelineParams pipelineParams {};
+    pipelineParams.name = "planetPipeline";
+    pipelineParams.descriptorSetLayouts = { perFrameDSL, perModelDSL };
+    pipelineParams.pushConstantRange = { VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConstants) };
+    pipelineParams.renderPass = _renderPass;
+    pipelineParams.msaaSamples = _msaaSamples;
     _pipeline = std::make_unique<Pipeline>(_ctx, "spv/shader_vert.spv", "spv/shader_frag.spv", pipelineParams);
 
-    // Create sun pipeline
+    // Pipeline for sun
     PipelineParams sunPipelineParams {};
+    sunPipelineParams.name = "sunPipeline";
     sunPipelineParams.descriptorSetLayouts = { perFrameDSL, perModelDSL };
     sunPipelineParams.pushConstantRange = { VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConstants) };
     sunPipelineParams.renderPass = _renderPass;
     sunPipelineParams.msaaSamples = _msaaSamples;
     _sunPipeline = std::make_unique<Pipeline>(_ctx, "spv/shader_vert.spv", "spv/sun_frag.spv", sunPipelineParams);
 
-
-    // Create orbit pipeline
-    PipelineParams orbitPipelineParams {
-        { perFrameDSL },                                          //Descriptor set layout
-        { VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PushConstants) }, //Push constants
-        _renderPass,                                              //Render pass
-        _msaaSamples,
-        true,
-        false
-    };
+    // Pipeline for orbits
+    PipelineParams orbitPipelineParams {};
+    orbitPipelineParams.name = "orbitPipeline";
+    orbitPipelineParams.descriptorSetLayouts = { perFrameDSL, perModelDSL };
+    orbitPipelineParams.pushConstantRange = { VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PushConstants) };
+    orbitPipelineParams.renderPass = _renderPass;
+    orbitPipelineParams.msaaSamples = _msaaSamples;
+    orbitPipelineParams.depthTest = true;
+    orbitPipelineParams.depthWrite = false;
     _orbitPipeline = std::make_unique<Pipeline>(_ctx, "spv/orbit_vert.spv", "spv/orbit_frag.spv", orbitPipelineParams);
 
-
-    // Create atmosphere pipeline
+    // Pipeline for Glow/Atmosphere
     PipelineParams atmospherePipelineParams {};
+    atmospherePipelineParams.name = "atmospherePipeline";
     atmospherePipelineParams.descriptorSetLayouts = { perFrameDSL, atmosphereDSL };
     atmospherePipelineParams.pushConstantRange = { VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConstants) };
     atmospherePipelineParams.renderPass = _renderPass;
     atmospherePipelineParams.msaaSamples = _msaaSamples;
     atmospherePipelineParams.depthTest = true;
     atmospherePipelineParams.depthWrite = false;
-    atmospherePipelineParams.transparency = true;
-    atmospherePipelineParams.backSide = true;
+    atmospherePipelineParams.frontFace = VK_FRONT_FACE_CLOCKWISE; // For atmosphere, we need to reverse the front face
     _atmospherePipeline = std::make_unique<Pipeline>(_ctx, "spv/shader_vert.spv", "spv/atmosphere_frag.spv", atmospherePipelineParams);
 
+    // Pipeline for object selection
     PipelineParams objectSelectionPipelineParams {};
+    objectSelectionPipelineParams.name = "objectSelectionPipeline";
     objectSelectionPipelineParams.descriptorSetLayouts = { perFrameDSL, perModelDSL };
     objectSelectionPipelineParams.pushConstantRange = { VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConstants) };
     objectSelectionPipelineParams.renderPass = _objectSelectionRenderPass;
-    objectSelectionPipelineParams.transparency = false; // No transparency for object selection
+    objectSelectionPipelineParams.blendEnable = false;
     _objectSelectionPipeline = std::make_unique<Pipeline>(_ctx, "spv/shader_vert.spv", "spv/objectselect_frag.spv", objectSelectionPipelineParams);
 
     createColorResources();
@@ -483,6 +484,9 @@ void Renderer::recreateSwapChain() {
     createObjectSelectionResources();
     createObjectSelectionDepthResources();
     createObjectSelectionFramebuffer();
+
+    // Inform ImGui
+    _gui->init(_swapChainExtent.width, _swapChainExtent.height);
 }
 
 void Renderer::cleanupSwapChain() {
@@ -993,6 +997,9 @@ void Renderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t image
     //     vkCmdPushConstants(commandBuffer, _orbitPipeline->getPipelineLayout(), VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(glm::mat4), &_orbitModels[m]->getModelMatrix());
     //     vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(_orbitModels[m]->getDeviceMesh()->getIndicesCount()), 1, 0, 0, 0);
     // }
+
+    // Draw ImGui frame
+    _gui->drawFrame(commandBuffer);
     
     vkCmdEndRenderPass(commandBuffer);
 
@@ -1041,11 +1048,15 @@ void Renderer::drawFrame() {
 
     // Reset the fence before drawing
     vkResetFences(_ctx->device, 1, &_inFlightFences[_currentFrame]);
+    vkResetCommandBuffer(_commandBuffers[_currentFrame], 0);
+
+    // Update ImGui frame
+    _gui->newFrame();
+    _gui->updateBuffers();
 
     // Update uniform buffer
     updateUniformBuffer(_currentFrame);
 
-    vkResetCommandBuffer(_commandBuffers[_currentFrame], 0);
     recordCommandBuffer(_commandBuffers[_currentFrame], imageIndex);
 
     VkSubmitInfo submitInfo{};

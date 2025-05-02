@@ -4,7 +4,7 @@
 
 
 Pipeline::Pipeline(std::shared_ptr<VulkanContext> ctx, const std::string& vertShaderPath, const std::string& fragShaderPath, const PipelineParams& params)
-    : _ctx(std::move(ctx))
+    : _ctx(std::move(ctx)), _name(params.name)
 {
     createPipelineLayout(params);
     createGraphicsPipeline(vertShaderPath, fragShaderPath, params);
@@ -87,19 +87,19 @@ void Pipeline::createGraphicsPipeline(const std::string& vertShaderPath, const s
     // This is where we specify the vertex input format (e.g., position, color, texture coordinates, etc.)
     VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
     vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+    // auto bindingDescription = Vertex::getBindingDescription();
+    // auto attributeDescriptions = Vertex::getAttributeDescriptions();
     vertexInputInfo.vertexBindingDescriptionCount = 1;
-    auto bindingDescription = Vertex::getBindingDescription();
-    auto attributeDescriptions = Vertex::getAttributeDescriptions();
-    vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size());
-    vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
-    vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
+    vertexInputInfo.pVertexBindingDescriptions = &params.vertexBindingDescription;
+    vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(params.vertexAttributeDescriptions.size());
+    vertexInputInfo.pVertexAttributeDescriptions = params.vertexAttributeDescriptions.data();
 
     // 2- Input assembly state
     // This is where we specify the topology of the vertex data (e.g., triangle list, line list, etc.)
     VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
     inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-    inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-    inputAssembly.primitiveRestartEnable = VK_FALSE;
+    inputAssembly.topology = params.topology;
+    inputAssembly.primitiveRestartEnable = params.primitiveRestart ? VK_TRUE : VK_FALSE;
 
     // 3- Viewport state
     // This is where we specify the viewport and scissor rectangle for rendering
@@ -117,10 +117,10 @@ void Pipeline::createGraphicsPipeline(const std::string& vertShaderPath, const s
     rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
     rasterizer.depthClampEnable = VK_FALSE;
     rasterizer.rasterizerDiscardEnable = VK_FALSE;
-    rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
+    rasterizer.polygonMode = params.polygonMode;
     rasterizer.lineWidth = 1.0f;
-    rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
-    rasterizer.frontFace = params.backSide ? VK_FRONT_FACE_CLOCKWISE : VK_FRONT_FACE_COUNTER_CLOCKWISE;
+    rasterizer.cullMode = params.cullMode;
+    rasterizer.frontFace = params.frontFace;
     rasterizer.depthBiasEnable = VK_FALSE;
 
     // 5- Multisampling state (Anti-aliasing)
@@ -137,7 +137,7 @@ void Pipeline::createGraphicsPipeline(const std::string& vertShaderPath, const s
     depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
     depthStencil.depthTestEnable = params.depthTest ? VK_TRUE : VK_FALSE;
     depthStencil.depthWriteEnable = params.depthWrite ? VK_TRUE : VK_FALSE;
-    depthStencil.depthCompareOp = VK_COMPARE_OP_LESS; // Lower depth = closer to camera
+    depthStencil.depthCompareOp = params.depthCompareOp; // Lower depth = closer to camera
     depthStencil.depthBoundsTestEnable = VK_FALSE;
     depthStencil.minDepthBounds = 0.0f; // Optional
     depthStencil.maxDepthBounds = 1.0f; // Optional
@@ -148,7 +148,7 @@ void Pipeline::createGraphicsPipeline(const std::string& vertShaderPath, const s
     // 7- Color blending state
     // This is where we specify the color blending settings (e.g., blend enable, blend factors, etc.)
     VkPipelineColorBlendAttachmentState colorBlendAttachment{};
-    colorBlendAttachment.blendEnable = params.transparency ? VK_TRUE : VK_FALSE;
+    colorBlendAttachment.blendEnable = params.blendEnable ? VK_TRUE : VK_FALSE;
     colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
     colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
     colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
@@ -201,7 +201,7 @@ void Pipeline::createGraphicsPipeline(const std::string& vertShaderPath, const s
     if (vkCreateGraphicsPipelines(_ctx->device, _ctx->pipelineCache, 1, &pipelineInfo, nullptr, &_pipeline) != VK_SUCCESS) {
         throw std::runtime_error("Failed to create graphics pipeline!");
     }else {
-        spdlog::info("Graphics pipeline created successfully");
+        spdlog::info("Graphics pipeline created successfully {}", _name != "" ? fmt::format("({})", _name) : "");
     }
 
     // Destroy shader modules after creating the pipeline

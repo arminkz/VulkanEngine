@@ -9,7 +9,7 @@ struct Vertex {
     glm::vec3 tangent;
 
     static VkVertexInputBindingDescription getBindingDescription();
-    static std::array<VkVertexInputAttributeDescription, 5> getAttributeDescriptions();
+    static std::vector<VkVertexInputAttributeDescription> getAttributeDescriptions();
 
     bool operator==(const Vertex& other) const;
 };

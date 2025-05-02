@@ -7,7 +7,7 @@ class DeviceTexture
 {
 public:
     DeviceTexture(std::shared_ptr<VulkanContext> ctx, const std::string& path, VkFormat format);
-    DeviceTexture(std::shared_ptr<VulkanContext> ctx, const void* pixelData, uint32_t width, uint32_t height, VkFormat format);
+    DeviceTexture(std::shared_ptr<VulkanContext> ctx, const void* pixelData, uint32_t width, uint32_t height, VkFormat format, uint32_t mipLevels = 0);
     ~DeviceTexture();
 
     void cleanup();

@@ -67,10 +67,14 @@ DeviceTexture::DeviceTexture(std::shared_ptr<VulkanContext> ctx, const std::stri
     _textureImageView = VulkanHelper::createImageView(_ctx, _textureImage, _format, _mipLevels, VK_IMAGE_ASPECT_COLOR_BIT);
 }
 
-DeviceTexture::DeviceTexture(std::shared_ptr<VulkanContext> ctx, const void* pixelData, uint32_t width, uint32_t height, VkFormat format)
+DeviceTexture::DeviceTexture(std::shared_ptr<VulkanContext> ctx, const void* pixelData, uint32_t width, uint32_t height, VkFormat format, uint32_t mipLevels)
     : _ctx(std::move(ctx)), _width(width), _height(height), _format(format)
 {
-    _mipLevels = glm::min(static_cast<int>(floor(log2(std::max(_width, _height)))) + 1, 12);
+    if (mipLevels == 0) {
+        _mipLevels = glm::max(glm::min(static_cast<int>(floor(log2(std::max(width, height)))) + 1, 12), 1);
+    } else {
+        _mipLevels = mipLevels;
+    }
 
     VkDeviceSize imageSize = _width * _height * 4;
 

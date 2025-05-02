@@ -86,6 +86,13 @@ void Window::startRenderingLoop()
 bool Window::eventCallback(void *userdata, SDL_Event *event)
 {
     Window* self = static_cast<Window*>(userdata);
+
+    // Pass the event to the GUI for processing
+    if(self->_renderer->getGUI()->handleEvents(event)) {
+        if (self->_renderer->getGUI()->isCapturingEvent()) {
+            return false; // Event is captured by GUI
+        }
+    }   
         
     // Access members of the window class
     if (event->type == SDL_EVENT_WINDOW_RESIZED) {

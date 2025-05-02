@@ -9,6 +9,7 @@
 #include "AtmosphereModel.h"
 #include "TextureSampler.h"
 #include "DescriptorSet.h"
+#include "GUI.h"
 
 const int MAX_FRAMES_IN_FLIGHT = 2;
 
@@ -16,6 +17,8 @@ class Renderer {
 
 private:
     std::shared_ptr<VulkanContext> _ctx;
+
+    std::unique_ptr<GUI> _gui = nullptr;
 
     std::unique_ptr<Camera> _camera = nullptr;
     uint32_t _currentTargetObjectID;
@@ -134,4 +137,5 @@ public:
     void informFramebufferResized() { _framebufferResized = true; };
 
     Camera* getCamera() { return _camera.get(); };
+    GUI* getGUI() { return _gui.get(); };
 };
