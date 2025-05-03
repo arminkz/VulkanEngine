@@ -40,6 +40,7 @@ set(LIBRARIES
 # Handle .cpp files
 file(GLOB SOURCES
     src/*
+    src/font/*
     src/geometry/*
     src/loader/*
     src/utilities/*
@@ -89,5 +90,15 @@ foreach(MODEL_FILE ${MODEL_FILES})
     add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/models $<TARGET_FILE_DIR:${PROJECT_NAME}>/models
         COMMAND ${CMAKE_COMMAND} -E echo "Copying model file: ${MODEL_NAME}"
+    )
+endforeach()
+
+# Copy font folder to the build directory
+file(GLOB FONT_FILES fonts/*)
+foreach(FONT_FILE ${FONT_FILES})
+    get_filename_component(FONT_NAME ${FONT_FILE} NAME)
+    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/fonts $<TARGET_FILE_DIR:${PROJECT_NAME}>/fonts
+        COMMAND ${CMAKE_COMMAND} -E echo "Copying font file: ${FONT_NAME}"
     )
 endforeach()

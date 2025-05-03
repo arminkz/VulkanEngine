@@ -1,5 +1,7 @@
 #include "GUI.h"
 #include "VulkanHelper.h"
+#include "font/lato.h"
+#include "font/IconsFontAwesome5.h"
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
@@ -23,6 +25,8 @@ GUI::GUI(std::shared_ptr<VulkanContext> ctx)
 
     // Setup Platform/Renderer bindings
     ImGui_ImplSDL3_InitForVulkan(_ctx->window);
+
+    loadFonts();
 
     // ImGui_ImplVulkan_InitInfo init_info = {};
     // init_info.Instance = _ctx->instance;
@@ -225,23 +229,6 @@ void GUI::updateBuffers()
         vtxDst += cmd_list->VtxBuffer.Size;
         idxDst += cmd_list->IdxBuffer.Size;
     }
-
-    // Flush to make writes visible to GPU
-    // this is not needed if using VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
-
-    // VkMappedMemoryRange mappedRangeVtx = {};
-	// mappedRangeVtx.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
-	// mappedRangeVtx.memory = _vertexBufferMemory;
-	// mappedRangeVtx.offset = 0;
-	// mappedRangeVtx.size = VK_WHOLE_SIZE;
-	// vkFlushMappedMemoryRanges(_ctx->device, 1, &mappedRangeVtx);
-
-    // VkMappedMemoryRange mappedRangeIdx = {};
-    // mappedRangeIdx.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
-    // mappedRangeIdx.memory = _indexBufferMemory;
-    // mappedRangeIdx.offset = 0;
-    // mappedRangeIdx.size = VK_WHOLE_SIZE;
-    // vkFlushMappedMemoryRanges(_ctx->device, 1, &mappedRangeIdx);
 }
 
 void GUI::drawFrame(VkCommandBuffer commandBuffer) {
@@ -306,4 +293,22 @@ bool GUI::isCapturingEvent()
 {
     ImGuiIO& io = ImGui::GetIO();
     return io.WantCaptureMouse || io.WantCaptureKeyboard;
+}
+
+void GUI::loadFonts()
+{
+    ImFontConfig fontConfig;
+    ImGuiIO& io = ImGui::GetIO();
+
+    std::copy_n("Lato", 5, fontConfig.Name);
+    io.Fonts->AddFontFromMemoryCompressedBase85TTF(lato_compressed_data_base85, 15.0f, &fontConfig);
+
+    std::copy_n("FontAwesome", 12, fontConfig.Name);
+    static const ImWchar icons_ranges[] = { ICON_MIN_FA, ICON_MAX_FA, 0 };
+	fontConfig.MergeMode = true;
+	fontConfig.PixelSnapH = true;
+	fontConfig.GlyphMinAdvanceX = 20.0f;
+	fontConfig.GlyphMaxAdvanceX = 20.0f;
+    io.Fonts->AddFontFromFileTTF("fonts/fa-regular-400.ttf", 13.0f, &fontConfig, icons_ranges);
+	io.Fonts->AddFontFromFileTTF("fonts/fa-solid-900.ttf", 13.0f, &fontConfig, icons_ranges);
 }
