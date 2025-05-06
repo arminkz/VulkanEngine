@@ -50,6 +50,8 @@ Renderer::~Renderer()
         vkDestroyFence(_ctx->device, _inFlightFences[i], nullptr);
     }
 
+
+    _gui = nullptr;
     _pipeline = nullptr;
     _orbitPipeline = nullptr;
     _sunPipeline = nullptr;
@@ -121,7 +123,7 @@ bool Renderer::initialize()
     std::shared_ptr<DeviceTexture> sunPerlinTexture = std::make_shared<DeviceTexture>(_ctx, "textures/perlin.png", VK_FORMAT_R8G8B8A8_UNORM);
     glm::mat4 sunModelMat = glm::mat4(1.f);
     sunModelMat = glm::scale(sunModelMat, glm::vec3(sizeSun));
-    std::shared_ptr<DeviceModel> sun = std::make_shared<DeviceModel>("sun", _ctx, sphereDMesh, sunModelMat, sunTexture, nullptr, nullptr, nullptr, sunPerlinTexture, _textureSampler);
+    std::shared_ptr<DeviceModel> sun = std::make_shared<DeviceModel>("Sun", _ctx, sphereDMesh, sunModelMat, sunTexture, nullptr, nullptr, nullptr, sunPerlinTexture, _textureSampler);
     sun->material.sunShadeMode = 1;
     sun->updateMaterial();
     _sunModel = sun;
@@ -139,7 +141,7 @@ bool Renderer::initialize()
     glm::mat4 mercuryModelMat = glm::mat4(1.f);
     mercuryModelMat = glm::translate(glm::mat4(1.f), glm::vec3(orbitRadMercury, 0.f, 0.f));
     mercuryModelMat = glm::scale(mercuryModelMat, glm::vec3(sizeMercury));
-    std::shared_ptr<DeviceModel> mercury = std::make_shared<DeviceModel>("mercury", _ctx, sphereDMesh, mercuryModelMat, mercuryColorTexture, nullptr, nullptr, nullptr, nullptr, _textureSampler);
+    std::shared_ptr<DeviceModel> mercury = std::make_shared<DeviceModel>("Mercury", _ctx, sphereDMesh, mercuryModelMat, mercuryColorTexture, nullptr, nullptr, nullptr, nullptr, _textureSampler);
     _planetModels.push_back(mercury);
     // Mercury is selectable
     _selectableObjects[mercury->getID()] = mercury;
@@ -155,7 +157,7 @@ bool Renderer::initialize()
     glm::mat4 venusModelMat = glm::mat4(1.f);
     venusModelMat = glm::translate(glm::mat4(1.f), glm::vec3(orbitRadVenus, 0.f, 0.f));
     venusModelMat = glm::scale(venusModelMat, glm::vec3(sizeVenus));
-    std::shared_ptr<DeviceModel> venus = std::make_shared<DeviceModel>("venus", _ctx, sphereDMesh, venusModelMat, venusColorTexture, nullptr, nullptr, nullptr, nullptr, _textureSampler);
+    std::shared_ptr<DeviceModel> venus = std::make_shared<DeviceModel>("Venus", _ctx, sphereDMesh, venusModelMat, venusColorTexture, nullptr, nullptr, nullptr, nullptr, _textureSampler);
     _planetModels.push_back(venus);
     // Venus is selectable
     _selectableObjects[venus->getID()] = venus;
@@ -169,7 +171,7 @@ bool Renderer::initialize()
     glm::mat4 earthModelMat = glm::mat4(1.f);
     earthModelMat = glm::translate(glm::mat4(1.f), glm::vec3(orbitRadEarth, 0.f, 0.f));
     earthModelMat = glm::scale(earthModelMat, glm::vec3(sizeEarth));
-    std::shared_ptr<DeviceModel> earth = std::make_shared<DeviceModel>("earth", _ctx, sphereDMesh, earthModelMat, colorTexture, unlitTexture, normalTexture, specularTexture, overlayTexture, _textureSampler);
+    std::shared_ptr<DeviceModel> earth = std::make_shared<DeviceModel>("Earth", _ctx, sphereDMesh, earthModelMat, colorTexture, unlitTexture, normalTexture, specularTexture, overlayTexture, _textureSampler);
     _planetModels.push_back(earth);
     // Earth is selectable
     _selectableObjects[earth->getID()] = earth;
@@ -191,7 +193,7 @@ bool Renderer::initialize()
     glm::mat4 moonModelMat = glm::mat4(1.f);
     moonModelMat = glm::translate(glm::mat4(1.f), glm::vec3(orbitRadEarth + orbitRadMoon, 0.f, 0.f));
     moonModelMat = glm::scale(moonModelMat, glm::vec3(sizeMoon));
-    std::shared_ptr<DeviceModel> moon = std::make_shared<DeviceModel>("moon", _ctx, sphereDMesh, moonModelMat, moonColorTexture, nullptr, nullptr, nullptr, nullptr, _textureSampler);
+    std::shared_ptr<DeviceModel> moon = std::make_shared<DeviceModel>("Moon", _ctx, sphereDMesh, moonModelMat, moonColorTexture, nullptr, nullptr, nullptr, nullptr, _textureSampler);
     _planetModels.push_back(moon);
     // Moon is selectable
     _selectableObjects[moon->getID()] = moon;
@@ -208,7 +210,7 @@ bool Renderer::initialize()
     glm::mat4 marsModelMat = glm::mat4(1.f);
     marsModelMat = glm::translate(glm::mat4(1.f), glm::vec3(orbitRadMars, 0.f, 0.f));
     marsModelMat = glm::scale(marsModelMat, glm::vec3(sizeMars));
-    std::shared_ptr<DeviceModel> mars = std::make_shared<DeviceModel>("mars", _ctx, sphereDMesh, marsModelMat, marsColorTexture, nullptr, nullptr, nullptr, nullptr, _textureSampler);
+    std::shared_ptr<DeviceModel> mars = std::make_shared<DeviceModel>("Mars", _ctx, sphereDMesh, marsModelMat, marsColorTexture, nullptr, nullptr, nullptr, nullptr, _textureSampler);
     _planetModels.push_back(mars);
     // Mars is selectable
     _selectableObjects[mars->getID()] = mars;
@@ -224,7 +226,7 @@ bool Renderer::initialize()
     glm::mat4 saturnModelMat = glm::mat4(1.f);
     saturnModelMat = glm::translate(glm::mat4(1.f), glm::vec3(orbitRadSaturn, 0.f, 0.f));
     saturnModelMat = glm::scale(saturnModelMat, glm::vec3(1.5f));
-    std::shared_ptr<DeviceModel> saturn = std::make_shared<DeviceModel>("saturn", _ctx, sphereDMesh, saturnModelMat, saturnColorTexture, nullptr, nullptr, nullptr, nullptr, _textureSampler);
+    std::shared_ptr<DeviceModel> saturn = std::make_shared<DeviceModel>("Saturn", _ctx, sphereDMesh, saturnModelMat, saturnColorTexture, nullptr, nullptr, nullptr, nullptr, _textureSampler);
     _planetModels.push_back(saturn);
     // Saturn is selectable
     _selectableObjects[saturn->getID()] = saturn;
@@ -250,7 +252,7 @@ bool Renderer::initialize()
     glm::mat4 neptuneModelMat = glm::mat4(1.f);
     neptuneModelMat = glm::translate(glm::mat4(1.f), glm::vec3(orbitRadNeptune, 0.f, 0.f));
     neptuneModelMat = glm::scale(neptuneModelMat, glm::vec3(sizeNeptune));
-    std::shared_ptr<DeviceModel> neptune = std::make_shared<DeviceModel>("neptune", _ctx, sphereDMesh, neptuneModelMat, neptuneColorTexture, nullptr, nullptr, nullptr, nullptr, _textureSampler);
+    std::shared_ptr<DeviceModel> neptune = std::make_shared<DeviceModel>("Neptune", _ctx, sphereDMesh, neptuneModelMat, neptuneColorTexture, nullptr, nullptr, nullptr, nullptr, _textureSampler);
     _planetModels.push_back(neptune);
     // Neptune is selectable
     _selectableObjects[neptune->getID()] = neptune;
@@ -999,7 +1001,7 @@ void Renderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t image
     // }
 
     // Draw ImGui frame
-    _gui->drawFrame(commandBuffer);
+    _gui->drawFrame(commandBuffer, _currentFrame);
     
     vkCmdEndRenderPass(commandBuffer);
 
@@ -1052,7 +1054,12 @@ void Renderer::drawFrame() {
 
     // Update ImGui frame
     _gui->newFrame();
-    _gui->updateBuffers();
+
+    // GUI elements can be added here
+    _selectableObjects[_currentTargetObjectID]->drawGUI();
+
+    _gui->endFrame();
+    _gui->updateBuffers(_currentFrame);
 
     // Update uniform buffer
     updateUniformBuffer(_currentFrame);

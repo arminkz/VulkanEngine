@@ -12,57 +12,18 @@ GUI::GUI(std::shared_ptr<VulkanContext> ctx)
     // Setup Dear ImGui context
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
-    ImGui::StyleColorsDark();
 
-    ImGuiIO& io = ImGui::GetIO(); (void)io;
+    // Disable ini file saving/loading
+    ImGuiIO& io = ImGui::GetIO();
+    io.IniFilename = nullptr;
+
+    // Style
+    loadFonts();
+    ImGui::StyleColorsDark();
     io.FontGlobalScale = _scaleFactor; // Scale all fonts by this factor
     ImGuiStyle& style = ImGui::GetStyle();
     style.ScaleAllSizes(_scaleFactor); // Scale all sizes by this factor
 
-    // io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;         // Enable Docking
-    // io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;       // Enable Multi-Viewport / Platform Windows
-
-
-    // Setup Platform/Renderer bindings
-    ImGui_ImplSDL3_InitForVulkan(_ctx->window);
-
-    loadFonts();
-
-    // ImGui_ImplVulkan_InitInfo init_info = {};
-    // init_info.Instance = _ctx->instance;
-    // init_info.PhysicalDevice = _ctx->physicalDevice;
-    // init_info.Device = _ctx->device;
-    // init_info.QueueFamily = 0; // TODO: Get the correct queue family index
-    // init_info.Queue = _ctx->graphicsQueue;
-    // init_info.PipelineCache = _ctx->pipelineCache;
-    // init_info.DescriptorPool = _ctx->descriptorPool;
-    // init_info.RenderPass = VK_NULL_HANDLE; // TODO: Set the correct render pass
-    // init_info.Subpass = 0;
-    // init_info.MinImageCount = 2; // Minimum number of images in the swapchain
-}
-
-
-GUI::~GUI()
-{
-    //ImGui_ImplVulkan_Shutdown();
-    ImGui_ImplSDL3_Shutdown();
-    ImGui::DestroyContext();
-
-    //Destroy vertex and index buffers
-    if (_vertexBuffer != VK_NULL_HANDLE) {
-        vkUnmapMemory(_ctx->device, _vertexBufferMemory);
-        vkDestroyBuffer(_ctx->device, _vertexBuffer, nullptr);
-        vkFreeMemory(_ctx->device, _vertexBufferMemory, nullptr);
-    }
-    if (_indexBuffer != VK_NULL_HANDLE) {
-        vkUnmapMemory(_ctx->device, _indexBufferMemory);
-        vkDestroyBuffer(_ctx->device, _indexBuffer, nullptr);
-        vkFreeMemory(_ctx->device, _indexBufferMemory, nullptr);
-    }
-}
-
-void GUI::init(float width, float height)
-{
     // Color scheme
     // vulkanStyle = ImGui::GetStyle();
     // vulkanStyle.Colors[ImGuiCol_TitleBg] = ImVec4(1.0f, 0.0f, 0.0f, 0.6f);
@@ -70,10 +31,28 @@ void GUI::init(float width, float height)
     // vulkanStyle.Colors[ImGuiCol_MenuBarBg] = ImVec4(1.0f, 0.0f, 0.0f, 0.4f);
     // vulkanStyle.Colors[ImGuiCol_Header] = ImVec4(1.0f, 0.0f, 0.0f, 0.4f);
     // vulkanStyle.Colors[ImGuiCol_CheckMark] = ImVec4(0.0f, 1.0f, 0.0f, 1.0f);
-
     // ImGuiStyle& style = ImGui::GetStyle();
     // style = vulkanStyle;
-    
+
+    // Setup Platform/Renderer bindings
+    ImGui_ImplSDL3_InitForVulkan(_ctx->window);
+
+    // Create Buffers
+    for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+        _vertexBuffers[i] = std::make_unique<Buffer>(_ctx);
+        _indexBuffers[i] = std::make_unique<Buffer>(_ctx);
+    }
+}
+
+GUI::~GUI()
+{
+    //ImGui_ImplVulkan_Shutdown();
+    ImGui_ImplSDL3_Shutdown();
+    ImGui::DestroyContext();
+}
+
+void GUI::init(float width, float height)
+{
     // Dimensions
     ImGuiIO& io = ImGui::GetIO();
     io.DisplaySize = ImVec2(width, height);
@@ -149,23 +128,14 @@ void GUI::initResources(VkRenderPass renderPass, VkSampleCountFlagBits msaaSampl
 
 void GUI::newFrame()
 {
-    //ImGui_ImplVulkan_NewFrame();
-    //ImGui_ImplSDL3_NewFrame();
     ImGui::NewFrame();
+}
 
-    // ImGui::SetWindowPos(ImVec2(20 * _scaleFactor, 20 * _scaleFactor), ImGuiCond_FirstUseEver);
-    // ImGui::SetWindowSize(ImVec2(300 * _scaleFactor, 300 * _scaleFactor), ImGuiCond_Always);
-    // ImGui::TextUnformatted("Vulkan Engine");
-    // ImGui::Begin("Example settings");
-    // ImGui::End();
-
-    ImGui::ShowDemoWindow();
-
+void GUI::endFrame(){
     ImGui::Render();
 }
 
-
-void GUI::updateBuffers()
+void GUI::updateBuffers(int currentFrame)
 {
     ImDrawData* drawData = ImGui::GetDrawData();
 
@@ -177,50 +147,28 @@ void GUI::updateBuffers()
     }
 
     // Vertex buffer
-    if ((_vertexBuffer == VK_NULL_HANDLE) || (_vertexCount != drawData->TotalVtxCount)) {
+    if ((_vertexBuffers[currentFrame]->getBuffer() == VK_NULL_HANDLE) || (_vertexCount != drawData->TotalVtxCount)) {
 
-        // Unmap and destroy the old buffer memory if it exists
-        if (_vertexBuffer != VK_NULL_HANDLE) {
-            vkUnmapMemory(_ctx->device, _vertexBufferMemory);
-            _vertexBufferMapped = nullptr;
-            vkDestroyBuffer(_ctx->device, _vertexBuffer, nullptr);
-            vkFreeMemory(_ctx->device, _vertexBufferMemory, nullptr);
-        }
-
+        // Unmap and destroy the old buffer
+        _vertexBuffers[currentFrame]->destroy();
+        
         // Create a new vertex buffer
-        VulkanHelper::createBuffer(_ctx, vertexBufferSize, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, _vertexBuffer, _vertexBufferMemory);
-        _vertexCount = drawData->TotalVtxCount;
-
-        // Map the buffer memory
-        vkMapMemory(_ctx->device, _vertexBufferMemory, 0, vertexBufferSize, 0, &_vertexBufferMapped);
+        _vertexBuffers[currentFrame]->initialize(vertexBufferSize, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
     }
 
     // Index buffer
-    if ((_indexBuffer == VK_NULL_HANDLE) || (_indexCount != drawData->TotalIdxCount)) {
+    if ((_indexBuffers[currentFrame]->getBuffer() == VK_NULL_HANDLE) || (_indexCount != drawData->TotalIdxCount)) {
 
-        // Unmap and destroy the old buffer memory if it exists
-        if (_indexBuffer != VK_NULL_HANDLE) {
-            vkUnmapMemory(_ctx->device, _indexBufferMemory);
-            _indexBufferMapped = nullptr;
-            vkDestroyBuffer(_ctx->device, _indexBuffer, nullptr);
-            vkFreeMemory(_ctx->device, _indexBufferMemory, nullptr);
-        }
+        // Unmap and destroy the old buffer
+        _indexBuffers[currentFrame]->destroy();
 
         // Create a new index buffer
-        VulkanHelper::createBuffer(_ctx, 
-            indexBufferSize, 
-            VK_BUFFER_USAGE_INDEX_BUFFER_BIT, 
-            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, 
-            _indexBuffer, _indexBufferMemory);
-        _indexCount = drawData->TotalIdxCount;
-
-        // Map the buffer memory
-        vkMapMemory(_ctx->device, _indexBufferMemory, 0, indexBufferSize, 0, &_indexBufferMapped);
+        _indexBuffers[currentFrame]->initialize(indexBufferSize, VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
     }
-
+    
     // Upload data
-    ImDrawVert* vtxDst = (ImDrawVert*)_vertexBufferMapped;
-    ImDrawIdx* idxDst = (ImDrawIdx*)_indexBufferMapped;
+    ImDrawVert* vtxDst = (ImDrawVert*)_vertexBuffers[currentFrame]->getMappedMemory();
+    ImDrawIdx* idxDst = (ImDrawIdx*)_indexBuffers[currentFrame]->getMappedMemory();
 
     for (int n = 0; n < drawData->CmdListsCount; n++) {
         const ImDrawList* cmd_list = drawData->CmdLists[n];
@@ -231,7 +179,7 @@ void GUI::updateBuffers()
     }
 }
 
-void GUI::drawFrame(VkCommandBuffer commandBuffer) {
+void GUI::drawFrame(VkCommandBuffer commandBuffer, uint32_t currentImage) {
 
     ImGuiIO& io = ImGui::GetIO();
 
@@ -262,8 +210,9 @@ void GUI::drawFrame(VkCommandBuffer commandBuffer) {
     if (imDrawData->CmdListsCount > 0) {
 
         VkDeviceSize offsets[1] = { 0 };
-        vkCmdBindVertexBuffers(commandBuffer, 0, 1, &_vertexBuffer, offsets);
-        vkCmdBindIndexBuffer(commandBuffer, _indexBuffer, 0, VK_INDEX_TYPE_UINT16);
+        std::array<VkBuffer, 1> vertexBuffers = { _vertexBuffers[currentImage]->getBuffer() };
+        vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers.data(), offsets);
+        vkCmdBindIndexBuffer(commandBuffer, _indexBuffers[currentImage]->getBuffer(), 0, VK_INDEX_TYPE_UINT16);
 
         for (int32_t i = 0; i < imDrawData->CmdListsCount; i++)
         {

@@ -60,3 +60,16 @@ DeviceModel::DeviceModel(
 DeviceModel::~DeviceModel()
 {
 }
+
+void DeviceModel::drawGUI()
+{
+    ImGui::SetNextWindowPos(ImVec2(30, 30), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(200, 300), ImGuiCond_Always);
+    ImGui::SetNextWindowCollapsed(true, ImGuiCond_Once);
+    ImGui::Begin(_name.c_str(), nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove);
+    ImGui::Text("Object ID: %d", _objectID);
+    ImGui::Text("Position: (%.2f, %.2f, %.2f)", _modelMatrix[3][0], _modelMatrix[3][1], _modelMatrix[3][2]);
+    ImGui::Text("Rotation: (%.2f, %.2f, %.2f)", glm::degrees(glm::eulerAngles(glm::quat_cast(_modelMatrix)))[0], glm::degrees(glm::eulerAngles(glm::quat_cast(_modelMatrix)))[1], glm::degrees(glm::eulerAngles(glm::quat_cast(_modelMatrix)))[2]);
+    ImGui::Text("Scale: (%.2f, %.2f, %.2f)", _modelMatrix[0][0], _modelMatrix[1][1], _modelMatrix[2][2]);
+    ImGui::End();
+}

@@ -52,3 +52,6 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
+
+// [Global constants]
+const int MAX_FRAMES_IN_FLIGHT = 2;

@@ -59,6 +59,8 @@ public:
 
     const DescriptorSet* getDescriptorSet() const { return _descriptorSet.get(); }
 
+    void drawGUI();
+
 private:
     static int objectIDCounter;
     int _objectID;
