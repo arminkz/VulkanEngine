@@ -10,12 +10,17 @@
 #include "TextureSampler.h"
 #include "DescriptorSet.h"
 #include "GUI.h"
+#include "SwapChain.h"
 
 class Renderer {
 
 private:
     std::shared_ptr<VulkanContext> _ctx;
 
+    // Swapchain
+    std::unique_ptr<SwapChain> _swapChain;
+
+    // GUI (ImGui)
     std::unique_ptr<GUI> _gui = nullptr;
 
     std::unique_ptr<Camera> _camera = nullptr;
@@ -33,7 +38,6 @@ private:
         alignas(16) glm::vec3 cameraPosition;
         alignas(16) glm::vec3 lightColor;
     } _sceneInfo;
-
     std::array<std::unique_ptr<UniformBuffer<SceneInfo>>, MAX_FRAMES_IN_FLIGHT> _sceneInfoUBOs;
     std::array<std::unique_ptr<DescriptorSet>, MAX_FRAMES_IN_FLIGHT> _sceneDescriptorSets;
 
@@ -42,61 +46,59 @@ private:
         alignas(4) uint32_t objectID;
     } _pushConstants;
 
+    // Models
     std::shared_ptr<DeviceModel> _sunModel = nullptr;
     std::vector<std::shared_ptr<DeviceModel>> _planetModels;
     std::vector<std::shared_ptr<DeviceModel>> _orbitModels;
     std::vector<std::shared_ptr<AtmosphereModel>> _atmosphereModels;
 
-    // Normal rendering
+    // Main render resources
     std::unique_ptr<Pipeline> _pipeline;
     std::unique_ptr<Pipeline> _sunPipeline;
     std::unique_ptr<Pipeline> _orbitPipeline;
     std::unique_ptr<Pipeline> _atmospherePipeline;
 
-    VkSwapchainKHR _swapChain = nullptr;
-    VkFormat _swapChainImageFormat;
-    VkExtent2D _swapChainExtent;
-    std::vector<VkImage> _swapChainImages;
-    std::vector<VkImageView> _swapChainImageViews;
-    void createSwapChain();
-    void recreateSwapChain();
-    void cleanupSwapChain();
-
-    std::vector<VkFramebuffer> _swapChainFramebuffers;
-    void createFramebuffers();
-
-    VkRenderPass _renderPass;
-    void createRenderPass();
-
     VkSampleCountFlagBits _msaaSamples = VK_SAMPLE_COUNT_1_BIT;
     VkImage _colorImage;
     VkDeviceMemory _colorImageMemory;
     VkImageView _colorImageView;
-    void createColorResources();
-
+    void createColorResources(); //A1
     VkImage _depthImage;
     VkDeviceMemory _depthImageMemory;
     VkImageView _depthImageView;
-    void createDepthResources();
+    void createDepthResources(); //A2
+    std::vector<VkFramebuffer> _swapChainFramebuffers;
+    void createFramebuffers();   //A3
+    VkRenderPass _renderPass;
+    void createRenderPass();
+    //TODO: merge A1, A2, A3 into one function
+    void recreateRenderResources();
+    void cleanupRenderResources(); // since this is only used in recreating, we can just merge it in the recreate function
+
 
     // Object selection rendering (has no swapchain, offscreen rendering)
     std::unique_ptr<Pipeline> _objectSelectionPipeline;
 
-    VkFramebuffer _objectSelectionFramebuffer;
-    void createObjectSelectionFramebuffer();
-
-    VkRenderPass _objectSelectionRenderPass;
-    void createObjectSelectionRenderPass();
-
-    VkImage _objectSelectionImage;
-    VkDeviceMemory _objectSelectionImageMemory;
-    VkImageView _objectSelectionImageView;
-    void createObjectSelectionResources();
-
+    // Object selection rendering (offscreen)
+    VkImage _objectSelectionColorImage;
+    VkDeviceMemory _objectSelectionColorImageMemory;
+    VkImageView _objectSelectionColorImageView;
+    void createObjectSelectionColorResources(); //B1
     VkImage _objectSelectionDepthImage;
     VkDeviceMemory _objectSelectionDepthImageMemory;
     VkImageView _objectSelectionDepthImageView;
-    void createObjectSelectionDepthResources();
+    void createObjectSelectionDepthResources(); //B2
+    VkFramebuffer _objectSelectionFramebuffer;
+    void createObjectSelectionFramebuffer(); //B3
+    VkRenderPass _objectSelectionRenderPass;
+    void createObjectSelectionRenderPass();
+    //TODO: merge B1, B2, B3 into one function
+    void recreateObjectSelectionResources(); 
+    void cleanupObjectSelectionResources(); // since this is only used in recreating, we can just merge it in the recreate function
+
+
+    void invalidate(); // Called when the window is resized
+
 
     std::vector<VkCommandBuffer> _commandBuffers;
 
@@ -106,15 +108,6 @@ private:
 
     uint32_t _currentFrame = 0;
     bool _framebufferResized = false;
-
-    VkSurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats);
-    VkPresentModeKHR chooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes);
-    VkExtent2D chooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities);
-
-    VkFormat findSupportedFormat(const std::vector<VkFormat>& candidates, VkImageTiling tiling, VkFormatFeatureFlags features);
-    VkFormat findDepthFormat();
-    VkSampleCountFlagBits getMaxMsaaSampleCount();
-    bool hasStencilComponent(VkFormat format);
 
     void updateUniformBuffer(uint32_t currentImage);
     

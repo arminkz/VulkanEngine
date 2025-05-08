@@ -57,6 +57,7 @@ private:
     void createPipelineLayout(const PipelineParams& params);
     void createGraphicsPipeline(const std::string& vertShaderPath, const std::string& fragShaderPath, const PipelineParams& params);
     VkShaderModule createShaderModule(const std::vector<char>& code);
+    std::vector<char> readBinaryFile(const std::string& filename);
 
     std::string _name;
 };

@@ -237,7 +237,7 @@ void VulkanContext::createDescriptorPool() {
     }
 
 void VulkanContext::createCommandPool() {
-    QueueFamilyIndices queueFamilyIndices = findQueueFamilies(physicalDevice, surface);
+    QueueFamilyIndices queueFamilyIndices = VulkanHelper::findQueueFamilies(physicalDevice, surface);
 
     VkCommandPoolCreateInfo poolInfo{};
     poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
@@ -272,7 +272,7 @@ bool VulkanContext::isDeviceSuitable(VkPhysicalDevice device) {
     bool hasRequiredExtensions = requiredExtensions.empty();
 
     // Check if the device swapchain is adequate
-    SwapChainSupportDetails swapChainSupport = querySwapChainSupport(device, surface);
+    SwapChainSupportDetails swapChainSupport = VulkanHelper::querySwapChainSupport(device, surface);
     bool swapChainAdequate = !swapChainSupport.formats.empty() && !swapChainSupport.presentModes.empty();
     
     // AND all the checks together

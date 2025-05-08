@@ -208,3 +208,22 @@ void Pipeline::createGraphicsPipeline(const std::string& vertShaderPath, const s
     vkDestroyShaderModule(_ctx->device, fragShaderModule, nullptr);
     vkDestroyShaderModule(_ctx->device, vertShaderModule, nullptr);
 }
+
+
+std::vector<char> Pipeline::readBinaryFile(const std::string& filename) {
+    std::ifstream file(filename, std::ios::ate | std::ios::binary);
+    if (!file.is_open()) {
+        spdlog::error("Failed to open file: {}", filename);
+        return {};
+    }
+
+    size_t fileSize = (size_t) file.tellg();
+    std::vector<char> buffer(fileSize);
+
+    file.seekg(0);
+    file.read(buffer.data(), fileSize);
+
+    file.close();
+
+    return buffer;
+}

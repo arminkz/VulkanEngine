@@ -66,6 +66,7 @@ void Window::startRenderingLoop()
     // Window event loop
     SDL_Event event;
     bool isRunning = true;
+    bool isPaused = false;
     
     while (isRunning) {
         while (SDL_PollEvent(&event)) {
@@ -73,10 +74,16 @@ void Window::startRenderingLoop()
                 case SDL_EVENT_QUIT:
                     isRunning = false;
                     break;
+                case SDL_EVENT_WINDOW_MINIMIZED:
+                    isPaused = true; // Pause rendering when the window is minimized
+                    break;
+                case SDL_EVENT_WINDOW_RESTORED:
+                    isPaused = false; // Resume rendering when the window is restored
+                    break;
             }
         }
 
-        _renderer->drawFrame(); // Call the renderer's drawFrame method
+        if(!isPaused) _renderer->drawFrame(); // Call the renderer's drawFrame method
 
         SDL_Delay(16); // Simulate a frame delay (60 FPS)
     }

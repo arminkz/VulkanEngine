@@ -27,7 +27,6 @@ public:
     VkCommandPool commandPool;
 
 private:
-
     bool _validationLayersAvailable = true;
 
     void createVulkanInstance();
