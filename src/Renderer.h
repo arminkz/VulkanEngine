@@ -11,6 +11,7 @@
 #include "DescriptorSet.h"
 #include "GUI.h"
 #include "SwapChain.h"
+#include "FrameBuffer.h"
 
 class Renderer {
 
@@ -22,6 +23,11 @@ private:
 
     // GUI (ImGui)
     std::unique_ptr<GUI> _gui = nullptr;
+
+    // Calculated constants
+    VkSampleCountFlagBits _msaaSamples = VK_SAMPLE_COUNT_1_BIT;
+
+
 
     std::unique_ptr<Camera> _camera = nullptr;
     uint32_t _currentTargetObjectID;
@@ -52,52 +58,47 @@ private:
     std::vector<std::shared_ptr<DeviceModel>> _orbitModels;
     std::vector<std::shared_ptr<AtmosphereModel>> _atmosphereModels;
 
+
+    // Called when the window is resized
+    void invalidate(); 
+
+
     // Main render resources
     std::unique_ptr<Pipeline> _pipeline;
     std::unique_ptr<Pipeline> _sunPipeline;
     std::unique_ptr<Pipeline> _orbitPipeline;
     std::unique_ptr<Pipeline> _atmospherePipeline;
 
-    VkSampleCountFlagBits _msaaSamples = VK_SAMPLE_COUNT_1_BIT;
-    VkImage _colorImage;
-    VkDeviceMemory _colorImageMemory;
-    VkImageView _colorImageView;
-    void createColorResources(); //A1
-    VkImage _depthImage;
-    VkDeviceMemory _depthImageMemory;
-    VkImageView _depthImageView;
-    void createDepthResources(); //A2
-    std::vector<VkFramebuffer> _swapChainFramebuffers;
-    void createFramebuffers();   //A3
     VkRenderPass _renderPass;
-    void createRenderPass();
-    //TODO: merge A1, A2, A3 into one function
-    void recreateRenderResources();
-    void cleanupRenderResources(); // since this is only used in recreating, we can just merge it in the recreate function
+    void createMainRenderPass();
+
+    std::vector<std::unique_ptr<FrameBuffer>> _mainFrameBuffers;
+    void createMainFrameBuffers();
+
+    void recreateMainRenderResources();
 
 
     // Object selection rendering (has no swapchain, offscreen rendering)
     std::unique_ptr<Pipeline> _objectSelectionPipeline;
 
-    // Object selection rendering (offscreen)
-    VkImage _objectSelectionColorImage;
-    VkDeviceMemory _objectSelectionColorImageMemory;
-    VkImageView _objectSelectionColorImageView;
-    void createObjectSelectionColorResources(); //B1
-    VkImage _objectSelectionDepthImage;
-    VkDeviceMemory _objectSelectionDepthImageMemory;
-    VkImageView _objectSelectionDepthImageView;
-    void createObjectSelectionDepthResources(); //B2
-    VkFramebuffer _objectSelectionFramebuffer;
-    void createObjectSelectionFramebuffer(); //B3
     VkRenderPass _objectSelectionRenderPass;
     void createObjectSelectionRenderPass();
-    //TODO: merge B1, B2, B3 into one function
+
+    std::unique_ptr<FrameBuffer> _objectSelectionFrameBuffer;
+    void createObjectSelectionFrameBuffer();
+
     void recreateObjectSelectionResources(); 
-    void cleanupObjectSelectionResources(); // since this is only used in recreating, we can just merge it in the recreate function
 
 
-    void invalidate(); // Called when the window is resized
+    // Bloom
+    struct BlurSettings {
+        float blurScale = 1.0f;
+        float blurStrength = 1.5f;
+    };
+    std::unique_ptr<Pipeline> _blurVertPipeline;
+    std::unique_ptr<Pipeline> _blurHorizPipeline;
+
+
 
 
     std::vector<VkCommandBuffer> _commandBuffers;

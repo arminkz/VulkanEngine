@@ -41,22 +41,12 @@ Renderer::~Renderer()
         _sceneInfoUBOs[i] = nullptr;
     }
 
-    // Clean up color resources
-    vkDestroyImageView(_ctx->device, _colorImageView, nullptr);
-    vkDestroyImage(_ctx->device, _colorImage, nullptr);
-    vkFreeMemory(_ctx->device, _colorImageMemory, nullptr);
-
-    // Clean up depth resources
-    vkDestroyImageView(_ctx->device, _depthImageView, nullptr);
-    vkDestroyImage(_ctx->device, _depthImage, nullptr);
-    vkFreeMemory(_ctx->device, _depthImageMemory, nullptr);
-
     // Clean up framebuffers
-    for (size_t i = 0; i < _swapChainFramebuffers.size(); i++) {
-        vkDestroyFramebuffer(_ctx->device, _swapChainFramebuffers[i], nullptr);
+    for (size_t i = 0; i < _mainFrameBuffers.size(); i++) {
+        _mainFrameBuffers[i] = nullptr;
     }
 
-    cleanupObjectSelectionResources();
+    _objectSelectionFrameBuffer = nullptr;
 
     // Clean up Vulkan resources
     for(size_t i=0; i < MAX_FRAMES_IN_FLIGHT; i++) {
@@ -308,7 +298,7 @@ bool Renderer::initialize()
 
 
     // Create render pass
-    createRenderPass();
+    createMainRenderPass();
     createObjectSelectionRenderPass();
 
     // Create ImGUI
@@ -378,13 +368,8 @@ bool Renderer::initialize()
     objectSelectionPipelineParams.blendEnable = false;
     _objectSelectionPipeline = std::make_unique<Pipeline>(_ctx, "spv/shader_vert.spv", "spv/objectselect_frag.spv", objectSelectionPipelineParams);
 
-    createColorResources();
-    createDepthResources();
-    createFramebuffers();
-
-    createObjectSelectionColorResources();
-    createObjectSelectionDepthResources();
-    createObjectSelectionFramebuffer();
+    createMainFrameBuffers();
+    createObjectSelectionFrameBuffer();
 
     // Create command buffers
     if (!createCommandBuffers()) return false;
@@ -394,77 +379,17 @@ bool Renderer::initialize()
 }
 
 
-void Renderer::cleanupRenderResources()
-{
-    // Clean up framebuffers
-    for (size_t i = 0; i < _swapChainFramebuffers.size(); i++) {
-        vkDestroyFramebuffer(_ctx->device, _swapChainFramebuffers[i], nullptr);
-    }
-    
-    // Clean up color resources
-    vkDestroyImageView(_ctx->device, _colorImageView, nullptr);
-    vkDestroyImage(_ctx->device, _colorImage, nullptr);
-    vkFreeMemory(_ctx->device, _colorImageMemory, nullptr);
-
-    // Clean up depth resources
-    vkDestroyImageView(_ctx->device, _depthImageView, nullptr);
-    vkDestroyImage(_ctx->device, _depthImage, nullptr);
-    vkFreeMemory(_ctx->device, _depthImageMemory, nullptr);
-
-    // Clean up Swapchain
-    _swapChain->cleanupSwapChain();
-}
-
-
-void Renderer::recreateRenderResources()
-{
-    cleanupRenderResources();
-
-    _swapChain->createSwapChain();
-    createColorResources();
-    createDepthResources();
-    createFramebuffers();
-}
-
-
-void Renderer::cleanupObjectSelectionResources()
-{
-    // Clean up object selection framebuffers
-    vkDestroyFramebuffer(_ctx->device, _objectSelectionFramebuffer, nullptr);
-
-    // Clean up object selection color resources
-    vkDestroyImageView(_ctx->device, _objectSelectionColorImageView, nullptr);
-    vkDestroyImage(_ctx->device, _objectSelectionColorImage, nullptr);
-    vkFreeMemory(_ctx->device, _objectSelectionColorImageMemory, nullptr);
-
-    // Clean up object selection depth resources
-    vkDestroyImageView(_ctx->device, _objectSelectionDepthImageView, nullptr);
-    vkDestroyImage(_ctx->device, _objectSelectionDepthImage, nullptr);
-    vkFreeMemory(_ctx->device, _objectSelectionDepthImageMemory, nullptr);
-}
-
-
-void Renderer::recreateObjectSelectionResources()
-{
-    cleanupObjectSelectionResources();
-
-    createObjectSelectionColorResources();
-    createObjectSelectionDepthResources();
-    createObjectSelectionFramebuffer();
-}
-
-
 void Renderer::invalidate()
 {
     vkDeviceWaitIdle(_ctx->device);
 
-    recreateRenderResources();
+    recreateMainRenderResources();
     recreateObjectSelectionResources();
     _gui->init(_swapChain->getSwapChainExtent().width, _swapChain->getSwapChainExtent().height);
 }
 
 
-void Renderer::createRenderPass() {
+void Renderer::createMainRenderPass() {
     
     VkAttachmentDescription colorAttachment{};
     colorAttachment.format = _swapChain->getSwapChainImageFormat();
@@ -541,6 +466,44 @@ void Renderer::createRenderPass() {
     spdlog::info("Render pass created successfully");
 }
 
+void Renderer::createMainFrameBuffers(){
+    FrameBufferParams framebufferParams{};
+    framebufferParams.extent = _swapChain->getSwapChainExtent();
+    framebufferParams.renderPass = _renderPass;
+    framebufferParams.msaaSamples = _msaaSamples;
+    framebufferParams.hasColor = true;
+    framebufferParams.hasDepth = true;
+    framebufferParams.hasResolve = true;
+    framebufferParams.colorFormat = _swapChain->getSwapChainImageFormat();
+    framebufferParams.depthFormat = VulkanHelper::findDepthFormat(_ctx);
+    framebufferParams.colorUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT;
+    framebufferParams.depthUsage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+
+    _mainFrameBuffers.resize(_swapChain->getSwapChainImageViews().size());
+    for (size_t i = 0; i < _swapChain->getSwapChainImageViews().size(); i++) {
+        framebufferParams.resolveImageView = _swapChain->getSwapChainImageViews()[i];
+        _mainFrameBuffers[i] = std::make_unique<FrameBuffer>(_ctx, framebufferParams);
+    }
+}
+
+void Renderer::recreateMainRenderResources()
+{
+    // Clean up framebuffers
+    for (size_t i = 0; i < _mainFrameBuffers.size(); i++) {
+        _mainFrameBuffers[i] = nullptr;
+    }
+
+    // Clean up Swapchain
+    _swapChain->cleanupSwapChain();
+
+    // Create new swapchain
+    _swapChain->createSwapChain();
+
+    // Create new framebuffers
+    createMainFrameBuffers();
+}
+
+
 void Renderer::createObjectSelectionRenderPass() {
 
     VkAttachmentDescription idAttachment{};
@@ -603,121 +566,29 @@ void Renderer::createObjectSelectionRenderPass() {
     }
 }
 
-void Renderer::createFramebuffers() {
-    _swapChainFramebuffers.resize(_swapChain->getSwapChainImageViews().size());
-
-    for (size_t i = 0; i < _swapChain->getSwapChainImageViews().size(); i++) {
-        std::array<VkImageView, 3> attachments = {
-            _colorImageView,
-            _depthImageView,
-            _swapChain->getSwapChainImageViews()[i] // Write resolved color to swap chain image view
-        };
-
-        VkFramebufferCreateInfo framebufferInfo{};
-        framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-        framebufferInfo.renderPass = _renderPass;
-        framebufferInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
-        framebufferInfo.pAttachments = attachments.data();
-        framebufferInfo.width = _swapChain->getSwapChainExtent().width;
-        framebufferInfo.height = _swapChain->getSwapChainExtent().height;
-        framebufferInfo.layers = 1;
-
-        if (vkCreateFramebuffer(_ctx->device, &framebufferInfo, nullptr, &_swapChainFramebuffers[i]) != VK_SUCCESS) {
-            throw std::runtime_error("Failed to create framebuffer!");
-        }
-    }
-}
-
-void Renderer::createObjectSelectionFramebuffer() {
-    std:: array<VkImageView, 2> attachments = {
-        _objectSelectionColorImageView,
-        _objectSelectionDepthImageView
-    };
-
-    VkFramebufferCreateInfo framebufferInfo{};
-    framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-    framebufferInfo.renderPass = _objectSelectionRenderPass;
-    framebufferInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
-    framebufferInfo.pAttachments = attachments.data();
-    framebufferInfo.width = _swapChain->getSwapChainExtent().width;
-    framebufferInfo.height = _swapChain->getSwapChainExtent().height;
-    framebufferInfo.layers = 1;
-
-    if (vkCreateFramebuffer(_ctx->device, &framebufferInfo, nullptr, &_objectSelectionFramebuffer) != VK_SUCCESS) {
-        throw std::runtime_error("Failed to create framebuffer!");
-    }
-}
-
-void Renderer::createColorResources() {
-
-    VkFormat colorFormat = _swapChain->getSwapChainImageFormat(); // Use the swap chain image format for color resources
-
-    VulkanHelper::createImage(_ctx, 
-        _swapChain->getSwapChainExtent().width,
-        _swapChain->getSwapChainExtent().height, 
-        colorFormat,
-        1,
-        _msaaSamples, // Number of samples for multisampling
-        VK_IMAGE_TILING_OPTIMAL, // Image tiling
-        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT,
-        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 
-        _colorImage, _colorImageMemory);
-
-    _colorImageView = VulkanHelper::createImageView(_ctx, _colorImage, colorFormat, 1, VK_IMAGE_ASPECT_COLOR_BIT);
-}
-
-void Renderer::createObjectSelectionColorResources() {
-
-    VkFormat idFormat = VK_FORMAT_R32_UINT; // Use a format that can store uint IDs
-
-    VulkanHelper::createImage(_ctx,
-        _swapChain->getSwapChainExtent().width, 
-        _swapChain->getSwapChainExtent().height, 
-        idFormat,
-        1,                     // Number of mip levels (not used here)
-        VK_SAMPLE_COUNT_1_BIT, // No multisampling for ID attachment
-        VK_IMAGE_TILING_OPTIMAL, 
-        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, // Color attachment and transfer source
-        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 
-        _objectSelectionColorImage, _objectSelectionColorImageMemory);
-
-    _objectSelectionColorImageView = VulkanHelper::createImageView(_ctx, _objectSelectionColorImage, idFormat, 1, VK_IMAGE_ASPECT_COLOR_BIT);
-}
-
-void Renderer::createDepthResources()
+void Renderer::createObjectSelectionFrameBuffer()
 {
-    VkFormat depthFormat = VulkanHelper::findDepthFormat(_ctx); // Find a suitable depth format
+    FrameBufferParams framebufferParams{};
+    framebufferParams.extent = _swapChain->getSwapChainExtent();
+    framebufferParams.renderPass = _objectSelectionRenderPass;
+    framebufferParams.msaaSamples = VK_SAMPLE_COUNT_1_BIT; // No multisampling for ID attachment
+    framebufferParams.hasColor = true;
+    framebufferParams.hasDepth = true;
+    framebufferParams.hasResolve = false;               // No resolve attachment for ID attachment
+    framebufferParams.colorFormat = VK_FORMAT_R32_UINT; // Use a format that can store uint IDs
+    framebufferParams.depthFormat = VulkanHelper::findDepthFormat(_ctx);
+    framebufferParams.colorUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT; // Color attachment and transfer source
+    framebufferParams.depthUsage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
 
-    VulkanHelper::createImage(_ctx, _swapChain->getSwapChainExtent().width, _swapChain->getSwapChainExtent().height, 
-        depthFormat,
-        1,            // Number of mip levels
-        _msaaSamples, // Number of samples for multisampling
-        VK_IMAGE_TILING_OPTIMAL, 
-        VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, 
-        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 
-        _depthImage, _depthImageMemory);
-
-    //transitionImageLayout(_depthImage, depthFormat, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
-    _depthImageView = VulkanHelper::createImageView(_ctx, _depthImage, depthFormat, 1, VK_IMAGE_ASPECT_DEPTH_BIT);
+    _objectSelectionFrameBuffer = std::make_unique<FrameBuffer>(_ctx, framebufferParams);
 }
 
-void Renderer::createObjectSelectionDepthResources()
+void Renderer::recreateObjectSelectionResources()
 {
-    VkFormat depthFormat = VulkanHelper::findDepthFormat(_ctx); // Find a suitable depth format
-
-    VulkanHelper::createImage(_ctx, _swapChain->getSwapChainExtent().width, _swapChain->getSwapChainExtent().height, 
-        depthFormat,
-        1,                     // Number of mip levels
-        VK_SAMPLE_COUNT_1_BIT, // Number of samples for multisampling (in object selection, we dont need AntiAliasing)
-        VK_IMAGE_TILING_OPTIMAL, 
-        VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, 
-        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 
-        _objectSelectionDepthImage, _objectSelectionDepthImageMemory);
-
-    //transitionImageLayout(_depthImage, depthFormat, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
-    _objectSelectionDepthImageView = VulkanHelper::createImageView(_ctx, _objectSelectionDepthImage, depthFormat, 1, VK_IMAGE_ASPECT_DEPTH_BIT);
-
+    _objectSelectionFrameBuffer = nullptr;
+    createObjectSelectionFrameBuffer();
 }
+
 
 void Renderer::updateUniformBuffer(uint32_t currentImage) {
     static auto startTime = std::chrono::high_resolution_clock::now();
@@ -777,7 +648,7 @@ void Renderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t image
     VkRenderPassBeginInfo renderPassBeginInfo{};
     renderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
     renderPassBeginInfo.renderPass = _renderPass;
-    renderPassBeginInfo.framebuffer = _swapChainFramebuffers[imageIndex];
+    renderPassBeginInfo.framebuffer = _mainFrameBuffers[imageIndex]->getFrameBuffer();
     renderPassBeginInfo.renderArea.offset = { 0, 0 };
     renderPassBeginInfo.renderArea.extent = _swapChain->getSwapChainExtent();
 
@@ -871,21 +742,21 @@ void Renderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t image
     }
 
     // // Draw orbit models
-    // _orbitPipeline->bind(commandBuffer);
+    _orbitPipeline->bind(commandBuffer);
 
-    // for(int m=0; m<static_cast<int>(_orbitModels.size()); m++) {
-    //     VkBuffer vertexBuffers[] = {_orbitModels[m]->getDeviceMesh()->getVertexBuffer()};
-    //     VkDeviceSize offsets[] = {0};
-    //     vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets); // We can have multiple vertex buffers
-    //     vkCmdBindIndexBuffer(commandBuffer, _orbitModels[m]->getDeviceMesh()->getIndexBuffer(), 0, VK_INDEX_TYPE_UINT32); // We can only use one index buffer at a time
+    for(int m=0; m<static_cast<int>(_orbitModels.size()); m++) {
+        VkBuffer vertexBuffers[] = {_orbitModels[m]->getDeviceMesh()->getVertexBuffer()};
+        VkDeviceSize offsets[] = {0};
+        vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets); // We can have multiple vertex buffers
+        vkCmdBindIndexBuffer(commandBuffer, _orbitModels[m]->getDeviceMesh()->getIndexBuffer(), 0, VK_INDEX_TYPE_UINT32); // We can only use one index buffer at a time
 
-    //     std::array<VkDescriptorSet, 1> descriptorSets = {
-    //         _sceneDescriptorSets[_currentFrame]->getDescriptorSet() // Per-frame descriptor set
-    //     };
-    //     vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, _orbitPipeline->getPipelineLayout(), 0, 1, descriptorSets.data(), 0, nullptr);
-    //     vkCmdPushConstants(commandBuffer, _orbitPipeline->getPipelineLayout(), VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(glm::mat4), &_orbitModels[m]->getModelMatrix());
-    //     vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(_orbitModels[m]->getDeviceMesh()->getIndicesCount()), 1, 0, 0, 0);
-    // }
+        std::array<VkDescriptorSet, 1> descriptorSets = {
+            _sceneDescriptorSets[_currentFrame]->getDescriptorSet() // Per-frame descriptor set
+        };
+        vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, _orbitPipeline->getPipelineLayout(), 0, 1, descriptorSets.data(), 0, nullptr);
+        vkCmdPushConstants(commandBuffer, _orbitPipeline->getPipelineLayout(), VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(glm::mat4), &_orbitModels[m]->getModelMatrix());
+        vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(_orbitModels[m]->getDeviceMesh()->getIndicesCount()), 1, 0, 0, 0);
+    }
 
     // Draw ImGui frame
     _gui->drawFrame(commandBuffer, _currentFrame);
@@ -1016,7 +887,7 @@ uint32_t Renderer::querySelectionImage(float mouseX, float mouseY) {
     VkRenderPassBeginInfo renderPassBeginInfo{};
     renderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
     renderPassBeginInfo.renderPass = _objectSelectionRenderPass;
-    renderPassBeginInfo.framebuffer = _objectSelectionFramebuffer;
+    renderPassBeginInfo.framebuffer = _objectSelectionFrameBuffer->getFrameBuffer();
     renderPassBeginInfo.renderArea.offset = { 0, 0 };
     renderPassBeginInfo.renderArea.extent = _swapChain->getSwapChainExtent();
 
@@ -1082,7 +953,7 @@ uint32_t Renderer::querySelectionImage(float mouseX, float mouseY) {
         stagingBuffer, stagingBufferMemory);
 
     // Copy the object selection image to the staging buffer for reading pixel data
-    VulkanHelper::copyImageToBuffer(_ctx, _objectSelectionColorImage, stagingBuffer, _swapChain->getSwapChainExtent().width, _swapChain->getSwapChainExtent().height);
+    VulkanHelper::copyImageToBuffer(_ctx, _objectSelectionFrameBuffer->getColorImage(), stagingBuffer, _swapChain->getSwapChainExtent().width, _swapChain->getSwapChainExtent().height);
 
     // Map the memory and read the pixel data
     uint32_t* pixelData = new uint32_t[_swapChain->getSwapChainExtent().width * _swapChain->getSwapChainExtent().height];
