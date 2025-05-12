@@ -142,9 +142,8 @@ bool Renderer::initialize()
     // Sun is selectable
     _selectableObjects[sun->getID()] = sun;
     // Sun is a light source
-    _sunModel->hasGlow = true;
     _sunModel->glowColor = glm::vec3(1.f, 0.8f, 0.5f);
-    _glowModels.push_back(sun);
+    _allModels.push_back(sun);
 
     //Sun atmosphere
     glm::mat4 sunAtmosphereModelMat = glm::mat4(1.f);
@@ -161,6 +160,7 @@ bool Renderer::initialize()
     _planetModels.push_back(mercury);
     // Mercury is selectable
     _selectableObjects[mercury->getID()] = mercury;
+    _allModels.push_back(mercury);
 
     // Mercury Orbit
     glm::mat4 mercuryOrbitModelMat = glm::mat4(1.f);
@@ -177,6 +177,7 @@ bool Renderer::initialize()
     _planetModels.push_back(venus);
     // Venus is selectable
     _selectableObjects[venus->getID()] = venus;
+    _allModels.push_back(venus);
 
     // Earth
     std::shared_ptr<DeviceTexture> colorTexture = std::make_shared<DeviceTexture>(_ctx, "textures/earth/10k_earth_day.jpg", VK_FORMAT_R8G8B8A8_SRGB);
@@ -191,6 +192,7 @@ bool Renderer::initialize()
     _planetModels.push_back(earth);
     // Earth is selectable
     _selectableObjects[earth->getID()] = earth;
+    _allModels.push_back(earth);
 
     // Earth Orbit
     glm::mat4 earthOrbitModelMat = glm::mat4(1.f);
@@ -213,6 +215,7 @@ bool Renderer::initialize()
     _planetModels.push_back(moon);
     // Moon is selectable
     _selectableObjects[moon->getID()] = moon;
+    _allModels.push_back(moon);
 
     // Moon Orbit
     glm::mat4 moonOrbitModelMat = glm::mat4(1.f);
@@ -230,6 +233,7 @@ bool Renderer::initialize()
     _planetModels.push_back(mars);
     // Mars is selectable
     _selectableObjects[mars->getID()] = mars;
+    _allModels.push_back(mars);
 
     // Mars Orbit
     glm::mat4 marsOrbitModelMat = glm::mat4(1.f);
@@ -246,6 +250,7 @@ bool Renderer::initialize()
     _planetModels.push_back(saturn);
     // Saturn is selectable
     _selectableObjects[saturn->getID()] = saturn;
+    _allModels.push_back(saturn);
 
     // Saturn Ring
     std::shared_ptr<DeviceTexture> ringTexture = std::make_shared<DeviceTexture>(_ctx, "textures/saturn/8k_saturn_ring_alpha.png", VK_FORMAT_R8G8B8A8_SRGB);
@@ -253,9 +258,11 @@ bool Renderer::initialize()
     ringModelMat = glm::translate(glm::mat4(1.f), glm::vec3(orbitRadSaturn, 0.f, 0.f));
     ringModelMat = glm::scale(ringModelMat, glm::vec3(sizeSaturn));
     ringModelMat = glm::rotate(ringModelMat, glm::radians(107.f), glm::vec3(1.f, 0.f, 0.f));
-    _planetModels.push_back(std::make_shared<DeviceModel>("saturn_ring", _ctx, ringDMesh, ringModelMat, ringTexture, nullptr, nullptr, nullptr, nullptr, _textureSampler));
-    _planetModels[6]->material.ambientStrength = 0.3f;
-    _planetModels[6]->updateMaterial();
+    std::shared_ptr<DeviceModel> saturn_ring = std::make_shared<DeviceModel>("SaturnRing", _ctx, ringDMesh, ringModelMat, ringTexture, nullptr, nullptr, nullptr, nullptr, _textureSampler);
+    _planetModels.push_back(saturn_ring);
+    saturn_ring->material.ambientStrength = 0.3f;
+    saturn_ring->updateMaterial();
+    _allModels.push_back(saturn_ring);
 
     // Saturn Orbit
     glm::mat4 saturnOrbitModelMat = glm::mat4(1.f);
@@ -272,6 +279,7 @@ bool Renderer::initialize()
     _planetModels.push_back(neptune);
     // Neptune is selectable
     _selectableObjects[neptune->getID()] = neptune;
+    _allModels.push_back(neptune);
 
     // Neptune Orbit
     glm::mat4 neptuneOrbitModelMat = glm::mat4(1.f);
@@ -917,11 +925,11 @@ void Renderer::recordBloomCommandBuffer(VkCommandBuffer commandBuffer, uint32_t 
     vkCmdSetScissor(commandBuffer, 0, 1, &offscreenScissor);
 
     _glowPipeline->bind(commandBuffer);
-    for(int m=0; m<static_cast<int>(_glowModels.size()); m++) {
-        VkBuffer vertexBuffers[] = {_glowModels[m]->getDeviceMesh()->getVertexBuffer()};
+    for(int m=0; m<static_cast<int>(_allModels.size()); m++) {
+        VkBuffer vertexBuffers[] = {_allModels[m]->getDeviceMesh()->getVertexBuffer()};
         VkDeviceSize offsets[] = {0};
         vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets); // We can have multiple vertex buffers
-        vkCmdBindIndexBuffer(commandBuffer, _glowModels[m]->getDeviceMesh()->getIndexBuffer(), 0, VK_INDEX_TYPE_UINT32); // We can only use one index buffer at a time
+        vkCmdBindIndexBuffer(commandBuffer, _allModels[m]->getDeviceMesh()->getIndexBuffer(), 0, VK_INDEX_TYPE_UINT32); // We can only use one index buffer at a time
 
         std::array<VkDescriptorSet, 1> descriptorSets = {
             _sceneDescriptorSets[_currentFrame]->getDescriptorSet()  // Per-frame descriptor set
@@ -930,11 +938,11 @@ void Renderer::recordBloomCommandBuffer(VkCommandBuffer commandBuffer, uint32_t 
 
         // Push constants for model
         GlowPassPushConstants pushConstants{};
-        pushConstants.model = _glowModels[m]->getModelMatrix();
-        pushConstants.glowColor = _glowModels[m]->glowColor;
+        pushConstants.model = _allModels[m]->getModelMatrix();
+        pushConstants.glowColor = _allModels[m]->glowColor;
         vkCmdPushConstants(commandBuffer, _glowPipeline->getPipelineLayout(), VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(GlowPassPushConstants), &pushConstants);
 
-        vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(_glowModels[m]->getDeviceMesh()->getIndicesCount()), 1, 0, 0, 0);
+        vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(_allModels[m]->getDeviceMesh()->getIndicesCount()), 1, 0, 0, 0);
     }
     vkCmdEndRenderPass(commandBuffer);
 

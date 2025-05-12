@@ -31,7 +31,8 @@ private:
 
     std::unique_ptr<Camera> _camera = nullptr;
     uint32_t _currentTargetObjectID;
-    std::unordered_map<int, std::shared_ptr<DeviceModel>> _selectableObjects;
+
+    
 
     std::shared_ptr<TextureSampler> _textureSampler;
 
@@ -53,10 +54,14 @@ private:
     } _pushConstants;
 
     // Models
-    std::shared_ptr<DeviceModel> _sunModel = nullptr;
-    std::vector<std::shared_ptr<DeviceModel>> _planetModels;
-    std::vector<std::shared_ptr<DeviceModel>> _orbitModels;
+    std::vector<std::shared_ptr<DeviceModel>> _allModels;                     // Planets + Sun + Rings
+    std::vector<std::shared_ptr<DeviceModel>> _planetModels;                  // Planets only
+    std::vector<std::shared_ptr<DeviceModel>> _orbitModels;                   // Orbits
     std::vector<std::shared_ptr<AtmosphereModel>> _atmosphereModels;
+    std::unordered_map<int, std::shared_ptr<DeviceModel>> _selectableObjects; // Selectable objects
+
+    // Models that need special treatment
+    std::shared_ptr<DeviceModel> _sunModel = nullptr;
 
 
     // Called when the window is resized
@@ -96,13 +101,13 @@ private:
         alignas(16) glm::vec3 glowColor;
     } _glowPushConstants;
     std::unique_ptr<Pipeline> _glowPipeline;
-    std::vector<std::shared_ptr<DeviceModel>> _glowModels;
+    //std::vector<std::shared_ptr<DeviceModel>> _glowModels;
 
 
     // Blur pass
     struct BlurSettings {
-        float blurScale = 3.0f;
-        float blurStrength = 2.f;
+        float blurScale = 2.0f;
+        float blurStrength = 1.5f;
     } blurSettings;
     std::unique_ptr<UniformBuffer<BlurSettings>> _blurSettingsUBO;
     std::unique_ptr<TextureSampler> _postprocessingTextureSampler;
@@ -113,8 +118,6 @@ private:
 
     std::unique_ptr<Pipeline> _compositePipeline;
     std::unique_ptr<DescriptorSet> _compositeDescriptorSet;
-
-
 
     VkRenderPass _offscreenRenderPass;
     VkRenderPass _offscreenRenderPassMSAA;
