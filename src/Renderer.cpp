@@ -83,6 +83,7 @@ bool Renderer::initialize()
 
     // Create Texture Sampler
     _textureSampler = std::make_unique<TextureSampler>(_ctx, 10);
+    _postprocessingTextureSampler = std::make_unique<TextureSampler>(_ctx, 1, VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE);
 
     // Create Render objects
     HostMesh sphere = MeshFactory::createSphereMesh(1.f, 64, 64);
@@ -140,6 +141,10 @@ bool Renderer::initialize()
     _sunModel = sun;
     // Sun is selectable
     _selectableObjects[sun->getID()] = sun;
+    // Sun is a light source
+    _sunModel->hasGlow = true;
+    _sunModel->glowColor = glm::vec3(1.f, 0.8f, 0.5f);
+    _glowModels.push_back(sun);
 
     //Sun atmosphere
     glm::mat4 sunAtmosphereModelMat = glm::mat4(1.f);
@@ -275,9 +280,9 @@ bool Renderer::initialize()
     _orbitModels.push_back(std::make_shared<DeviceModel>("neptune_orbit", _ctx, quadDMesh, neptuneOrbitModelMat, nullptr, nullptr, nullptr, nullptr, nullptr, _textureSampler));
 
     // Create Camera
-    _currentTargetObjectID = 5; // Earth
+    _currentTargetObjectID = 2; // Sun
     Camera::CameraParams cp{};
-    cp.target = _selectableObjects[_currentTargetObjectID]->getPosition();
+    cp.target = glm::vec3(0.f); //_selectableObjects[_currentTargetObjectID]->getPosition();
     _camera = std::make_unique<Camera>(cp);
 
     // Scene UBO (Per Frame)
@@ -293,18 +298,22 @@ bool Renderer::initialize()
         _sceneInfoUBOs[i]->update(_sceneInfo);
     }
     
-
-
-
-
     // Create render pass
+    createOffscreenRenderPasses();
     createMainRenderPass();
     createObjectSelectionRenderPass();
 
+    // Create framebuffers
+    createOffscreenFrameBuffers();
+    createMainFrameBuffers();
+    createObjectSelectionFrameBuffer();
+    
     // Create ImGUI
     _gui = std::make_unique<GUI>(_ctx);
     _gui->init(_swapChain->getSwapChainExtent().width, _swapChain->getSwapChainExtent().height);
     _gui->initResources(_renderPass, _msaaSamples);
+
+
 
     // Create per-frame descriptor sets
     for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
@@ -313,17 +322,102 @@ bool Renderer::initialize()
         };
         _sceneDescriptorSets[i] = std::make_unique<DescriptorSet>(_ctx, perSceneDescriptors);
     }
+    VkDescriptorSetLayout perFrameDSL = _sceneDescriptorSets[0]->getDescriptorSetLayout();
+
+
+    // Pipeline for offscreen Glow Pass
+    PipelineParams glowPassPipelineParams {};
+    glowPassPipelineParams.name = "glowPassPipeline";
+    glowPassPipelineParams.descriptorSetLayouts = { perFrameDSL };
+    glowPassPipelineParams.pushConstantRanges = {{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(GlowPassPushConstants)}};
+    glowPassPipelineParams.renderPass = _offscreenRenderPass;
+    _glowPipeline = std::make_unique<Pipeline>(_ctx, "spv/glow/glow_vert.spv", "spv/glow/glow_frag.spv", glowPassPipelineParams);
+
+    VkDescriptorImageInfo glowPassOutputTexture{};
+    glowPassOutputTexture.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    glowPassOutputTexture.imageView = _offscreenFrameBuffers[0]->getColorImageView();
+    glowPassOutputTexture.sampler = _postprocessingTextureSampler->getSampler();
+
+    // Pipeline for offscreen Blur Pass (vertical)
+    _blurSettingsUBO = std::make_unique<UniformBuffer<BlurSettings>>(_ctx);
+    _blurSettingsUBO->update(blurSettings);
+
+    std::vector<Descriptor> blurVertDescriptors = {
+        Descriptor(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT, 1, _blurSettingsUBO->getDescriptorInfo()),
+        Descriptor(1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 1, glowPassOutputTexture), // Glow texture
+    };
+    _blurVertDescriptorSet = std::make_unique<DescriptorSet>(_ctx, blurVertDescriptors);
+
+    VkDescriptorImageInfo blurVertPassOutputTexture{};
+    blurVertPassOutputTexture.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    blurVertPassOutputTexture.imageView = _offscreenFrameBuffers[1]->getColorImageView();
+    blurVertPassOutputTexture.sampler = _postprocessingTextureSampler->getSampler();
+
+    PipelineParams blurPassPipelineParams {};
+    blurPassPipelineParams.name = "blurPassPipeline - vertical";
+    blurPassPipelineParams.vertexBindingDescription = std::nullopt; // This is a fullscreen triangle, so we don't need vertex binding description
+    blurPassPipelineParams.vertexAttributeDescriptions = {};
+    blurPassPipelineParams.cullMode = VK_CULL_MODE_NONE;
+    blurPassPipelineParams.descriptorSetLayouts = { _blurVertDescriptorSet->getDescriptorSetLayout() }; 
+    blurPassPipelineParams.pushConstantRanges = {};
+    blurPassPipelineParams.renderPass = _offscreenRenderPass;
+    int blurDirection = 0; // 0 for vertical
+    VkSpecializationMapEntry blurDirectionMapEntry = {0, 0, sizeof(int)};
+    blurPassPipelineParams.fragmentShaderSpecializationInfo = VkSpecializationInfo {1, &blurDirectionMapEntry, sizeof(int), &blurDirection};
+    _blurVertPipeline = std::make_unique<Pipeline>(_ctx, "spv/blur/blur_vert.spv", "spv/blur/blur_frag.spv", blurPassPipelineParams);
+
+
+    // Pipeline for offscreen Blur Pass (horizontal)
+    std::vector<Descriptor> blurHorizDescriptors = {
+        Descriptor(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT, 1, _blurSettingsUBO->getDescriptorInfo()),
+        Descriptor(1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 1, blurVertPassOutputTexture), // Blur vert texture
+    };
+    _blurHorizDescriptorSet = std::make_unique<DescriptorSet>(_ctx, blurHorizDescriptors);
+
+    VkDescriptorImageInfo blurHorizPassOutputTexture{};
+    blurHorizPassOutputTexture.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    blurHorizPassOutputTexture.imageView = _offscreenFrameBuffers[2]->getColorImageView();
+    blurHorizPassOutputTexture.sampler = _postprocessingTextureSampler->getSampler();
+
+    blurPassPipelineParams.name = "blurPassPipeline - horizontal";
+    blurDirection = 1;     // 1 for horizontal
+    blurPassPipelineParams.renderPass = _offscreenRenderPass;
+    _blurHorizPipeline = std::make_unique<Pipeline>(_ctx, "spv/blur/blur_vert.spv", "spv/blur/blur_frag.spv", blurPassPipelineParams);
+
+
+    // Pipeline for composite pass (Combines the blurred texture with the main scene)
+    VkDescriptorImageInfo normalPassOutputTexture{};
+    normalPassOutputTexture.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    normalPassOutputTexture.imageView = _offscreenFrameBuffers[3]->getResolveImageView();
+    normalPassOutputTexture.sampler = _postprocessingTextureSampler->getSampler();
+
+    std::vector<Descriptor> compositeDescriptors = {
+        Descriptor(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 1, blurHorizPassOutputTexture),   // Blur texture
+        Descriptor(1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 1, normalPassOutputTexture),      // Normal scene texture
+    };
+    _compositeDescriptorSet = std::make_unique<DescriptorSet>(_ctx, compositeDescriptors);
+
+    PipelineParams compositePipelineParams {};
+    compositePipelineParams.name = "compositePipeline";
+    compositePipelineParams.vertexBindingDescription = std::nullopt; // This is a fullscreen triangle, so we don't need vertex binding description
+    compositePipelineParams.vertexAttributeDescriptions = {};
+    compositePipelineParams.cullMode = VK_CULL_MODE_NONE;
+    compositePipelineParams.descriptorSetLayouts = { _compositeDescriptorSet->getDescriptorSetLayout() };
+    compositePipelineParams.pushConstantRanges = {};
+    compositePipelineParams.renderPass = _renderPass;
+    compositePipelineParams.msaaSamples = _msaaSamples;
+    _compositePipeline = std::make_unique<Pipeline>(_ctx, "spv/composite/composite_vert.spv", "spv/composite/composite_frag.spv", compositePipelineParams);
+
 
     VkDescriptorSetLayout perModelDSL = _planetModels[0]->getDescriptorSet()->getDescriptorSetLayout();
-    VkDescriptorSetLayout perFrameDSL = _sceneDescriptorSets[0]->getDescriptorSetLayout();
     VkDescriptorSetLayout atmosphereDSL = _atmosphereModels[0]->getDescriptorSet()->getDescriptorSetLayout();
 
     // Pipeline for general planets
     PipelineParams pipelineParams {};
     pipelineParams.name = "planetPipeline";
     pipelineParams.descriptorSetLayouts = { perFrameDSL, perModelDSL };
-    pipelineParams.pushConstantRange = { VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConstants) };
-    pipelineParams.renderPass = _renderPass;
+    pipelineParams.pushConstantRanges = {{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConstants)}};
+    pipelineParams.renderPass = _offscreenRenderPassMSAA;
     pipelineParams.msaaSamples = _msaaSamples;
     _pipeline = std::make_unique<Pipeline>(_ctx, "spv/shader_vert.spv", "spv/shader_frag.spv", pipelineParams);
 
@@ -331,8 +425,8 @@ bool Renderer::initialize()
     PipelineParams sunPipelineParams {};
     sunPipelineParams.name = "sunPipeline";
     sunPipelineParams.descriptorSetLayouts = { perFrameDSL, perModelDSL };
-    sunPipelineParams.pushConstantRange = { VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConstants) };
-    sunPipelineParams.renderPass = _renderPass;
+    sunPipelineParams.pushConstantRanges = {{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConstants)}};
+    sunPipelineParams.renderPass = _offscreenRenderPassMSAA;
     sunPipelineParams.msaaSamples = _msaaSamples;
     _sunPipeline = std::make_unique<Pipeline>(_ctx, "spv/shader_vert.spv", "spv/sun_frag.spv", sunPipelineParams);
 
@@ -340,8 +434,8 @@ bool Renderer::initialize()
     PipelineParams orbitPipelineParams {};
     orbitPipelineParams.name = "orbitPipeline";
     orbitPipelineParams.descriptorSetLayouts = { perFrameDSL, perModelDSL };
-    orbitPipelineParams.pushConstantRange = { VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PushConstants) };
-    orbitPipelineParams.renderPass = _renderPass;
+    orbitPipelineParams.pushConstantRanges = {{VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PushConstants)}};
+    orbitPipelineParams.renderPass = _offscreenRenderPassMSAA;
     orbitPipelineParams.msaaSamples = _msaaSamples;
     orbitPipelineParams.depthTest = true;
     orbitPipelineParams.depthWrite = false;
@@ -351,8 +445,8 @@ bool Renderer::initialize()
     PipelineParams atmospherePipelineParams {};
     atmospherePipelineParams.name = "atmospherePipeline";
     atmospherePipelineParams.descriptorSetLayouts = { perFrameDSL, atmosphereDSL };
-    atmospherePipelineParams.pushConstantRange = { VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConstants) };
-    atmospherePipelineParams.renderPass = _renderPass;
+    atmospherePipelineParams.pushConstantRanges = {{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConstants)}};
+    atmospherePipelineParams.renderPass = _offscreenRenderPassMSAA;
     atmospherePipelineParams.msaaSamples = _msaaSamples;
     atmospherePipelineParams.depthTest = true;
     atmospherePipelineParams.depthWrite = false;
@@ -363,13 +457,11 @@ bool Renderer::initialize()
     PipelineParams objectSelectionPipelineParams {};
     objectSelectionPipelineParams.name = "objectSelectionPipeline";
     objectSelectionPipelineParams.descriptorSetLayouts = { perFrameDSL, perModelDSL };
-    objectSelectionPipelineParams.pushConstantRange = { VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConstants) };
+    objectSelectionPipelineParams.pushConstantRanges = {{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConstants)}};
     objectSelectionPipelineParams.renderPass = _objectSelectionRenderPass;
     objectSelectionPipelineParams.blendEnable = false;
     _objectSelectionPipeline = std::make_unique<Pipeline>(_ctx, "spv/shader_vert.spv", "spv/objectselect_frag.spv", objectSelectionPipelineParams);
 
-    createMainFrameBuffers();
-    createObjectSelectionFrameBuffer();
 
     // Create command buffers
     if (!createCommandBuffers()) return false;
@@ -388,6 +480,150 @@ void Renderer::invalidate()
     _gui->init(_swapChain->getSwapChainExtent().width, _swapChain->getSwapChainExtent().height);
 }
 
+
+void Renderer::createOffscreenRenderPasses()
+{
+    VkAttachmentDescription colorAttachment{};
+    colorAttachment.format = VK_FORMAT_R8G8B8A8_UNORM;
+    colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
+    colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    colorAttachment.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+    VkAttachmentDescription depthAttachment{};
+    depthAttachment.format = VulkanHelper::findDepthFormat(_ctx);
+    depthAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
+    depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    depthAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    depthAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    depthAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    depthAttachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+
+    std::array<VkAttachmentDescription, 2> attachments = { colorAttachment, depthAttachment};
+
+    VkAttachmentReference colorReference = { 0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL };
+    VkAttachmentReference depthReference = { 1, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL };
+
+    VkSubpassDescription subpass{};
+    subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+    subpass.colorAttachmentCount = 1;
+    subpass.pColorAttachments = &colorReference;
+    subpass.pDepthStencilAttachment = &depthReference; // Attach depth attachment
+
+    std::array<VkSubpassDependency, 2> dependencies;
+
+    dependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
+    dependencies[0].dstSubpass = 0;
+    dependencies[0].srcStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+    dependencies[0].srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+    dependencies[0].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    dependencies[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    dependencies[0].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+
+    dependencies[1].srcSubpass = 0;
+    dependencies[1].dstSubpass = VK_SUBPASS_EXTERNAL;
+    dependencies[1].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    dependencies[1].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    dependencies[1].dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+    dependencies[1].dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+    dependencies[1].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+
+    VkRenderPassCreateInfo renderPassInfo{};
+    renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+    renderPassInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
+    renderPassInfo.pAttachments = attachments.data();
+    renderPassInfo.subpassCount = 1;
+    renderPassInfo.pSubpasses = &subpass;
+    renderPassInfo.dependencyCount = static_cast<uint32_t>(dependencies.size());
+    renderPassInfo.pDependencies = dependencies.data();
+
+    if (vkCreateRenderPass(_ctx->device, &renderPassInfo, nullptr, &_offscreenRenderPass) != VK_SUCCESS) {
+        throw std::runtime_error("Failed to create (Offscreen Non-MSAA) render pass!");
+    }
+    spdlog::info("Render pass created successfully. (Offscreen Non-MSAA)");
+
+
+    // MSAA Render Pass
+    colorAttachment.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+    VkAttachmentDescription resolveAttachment{};
+    resolveAttachment.format = VK_FORMAT_R8G8B8A8_UNORM;
+    resolveAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
+    resolveAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    resolveAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    resolveAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    resolveAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    resolveAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    resolveAttachment.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+    colorAttachment.samples = _msaaSamples;
+    depthAttachment.samples = _msaaSamples;
+    std::array<VkAttachmentDescription, 3> msaaAttachments = { colorAttachment, depthAttachment, resolveAttachment};
+
+    VkAttachmentReference resolveReference = { 2, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL };
+
+    VkSubpassDescription msaaSubpass{};
+    msaaSubpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+    msaaSubpass.colorAttachmentCount = 1;
+    msaaSubpass.pColorAttachments = &colorReference;
+    msaaSubpass.pDepthStencilAttachment = &depthReference; // Attach depth attachment
+    msaaSubpass.pResolveAttachments = &resolveReference;   // Attach resolve attachment
+
+    VkRenderPassCreateInfo msaaRenderPassInfo{};
+    msaaRenderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+    msaaRenderPassInfo.attachmentCount = static_cast<uint32_t>(msaaAttachments.size());
+    msaaRenderPassInfo.pAttachments = msaaAttachments.data();
+    msaaRenderPassInfo.subpassCount = 1;
+    msaaRenderPassInfo.pSubpasses = &msaaSubpass;
+    msaaRenderPassInfo.dependencyCount = static_cast<uint32_t>(dependencies.size());
+    msaaRenderPassInfo.pDependencies = dependencies.data();
+
+    if (vkCreateRenderPass(_ctx->device, &msaaRenderPassInfo, nullptr, &_offscreenRenderPassMSAA) != VK_SUCCESS) {
+        throw std::runtime_error("Failed to create (Offscreen MSAA) render pass!");
+    }
+    spdlog::info("Render pass created successfully. (Offscreen MSAA)");
+
+}
+
+void Renderer::createOffscreenFrameBuffers() 
+{
+    _offscreenFrameBuffers.resize(4);
+
+    // 1 offscreen framebuffer for glow - 1 for vertical blur - 1 for horizontal blur (with 1/2 resolution)
+    FrameBufferParams ofbparams{};
+    ofbparams.extent.width = static_cast<int>(_swapChain->getSwapChainExtent().width);
+    ofbparams.extent.height = static_cast<int>(_swapChain->getSwapChainExtent().height);
+    ofbparams.renderPass = _offscreenRenderPass;
+    ofbparams.hasColor = true;
+    ofbparams.hasDepth = true;
+    ofbparams.hasResolve = false;
+    ofbparams.msaaSamples = VK_SAMPLE_COUNT_1_BIT;
+    ofbparams.colorFormat = VK_FORMAT_R8G8B8A8_UNORM;
+    ofbparams.depthFormat = VulkanHelper::findDepthFormat(_ctx);
+    ofbparams.colorUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+    ofbparams.depthUsage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+
+    _offscreenFrameBuffers[0] = std::make_unique<FrameBuffer>(_ctx, ofbparams); // Glow pass framebuffer
+    _offscreenFrameBuffers[1] = std::make_unique<FrameBuffer>(_ctx, ofbparams); // Vertical blur framebuffer
+    _offscreenFrameBuffers[2] = std::make_unique<FrameBuffer>(_ctx, ofbparams); // Horizontal blur framebuffer
+
+    // 1 offscreen framebuffer for normal rendering (with full resolution)
+    ofbparams.extent.width = _swapChain->getSwapChainExtent().width;
+    ofbparams.extent.height = _swapChain->getSwapChainExtent().height;
+    ofbparams.renderPass = _offscreenRenderPassMSAA;
+    ofbparams.hasResolve = true;
+    ofbparams.msaaSamples = _msaaSamples;
+    ofbparams.resolveFormat = VK_FORMAT_R8G8B8A8_UNORM;
+    ofbparams.colorUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT;
+    ofbparams.depthUsage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+    ofbparams.resolveUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+
+    _offscreenFrameBuffers[3] = std::make_unique<FrameBuffer>(_ctx, ofbparams); // Normal rendering framebuffer
+}
 
 void Renderer::createMainRenderPass() {
     
@@ -463,7 +699,7 @@ void Renderer::createMainRenderPass() {
     if (vkCreateRenderPass(_ctx->device, &renderPassInfo, nullptr, &_renderPass) != VK_SUCCESS) {
         throw std::runtime_error("Failed to create render pass!");
     }
-    spdlog::info("Render pass created successfully");
+    spdlog::info("Render pass created successfully. (Main Render Pass)");
 }
 
 void Renderer::createMainFrameBuffers(){
@@ -633,6 +869,231 @@ bool Renderer::createCommandBuffers() {
         return true;
     }
 }
+
+
+void Renderer::recordBloomCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex)
+{
+    // Begin Command buffer recording
+    VkCommandBufferBeginInfo beginInfo{};
+    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    beginInfo.flags = 0;
+    beginInfo.pInheritanceInfo = nullptr;
+
+    if (vkBeginCommandBuffer(commandBuffer, &beginInfo) != VK_SUCCESS) {
+        spdlog::error("Failed to begin recording command buffer!");
+        return;
+    }
+
+    /*
+        First pass (Glow): Render glowing objects to offscreen framebuffer
+    */
+    VkRenderPassBeginInfo renderPassBeginInfo{};
+    renderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+    renderPassBeginInfo.renderPass = _offscreenRenderPass;
+    renderPassBeginInfo.framebuffer = _offscreenFrameBuffers[0]->getFrameBuffer();
+    renderPassBeginInfo.renderArea.offset = { 0, 0 };
+    renderPassBeginInfo.renderArea.extent = _offscreenFrameBuffers[0]->getExtent();
+
+    std::array<VkClearValue, 2> clearValues{};
+    clearValues[0].color = { { 0.0f, 0.0f, 0.0f, 1.0f } }; // Clear color
+    clearValues[1].depthStencil = { 1.0f, 0 };             // Clear depth value
+    renderPassBeginInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
+    renderPassBeginInfo.pClearValues = clearValues.data();
+
+    vkCmdBeginRenderPass(commandBuffer, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+    VkViewport offscreenViewport{};
+    offscreenViewport.x = 0.0f;
+    offscreenViewport.y = 0.0f;
+    offscreenViewport.width = _offscreenFrameBuffers[0]->getExtent().width;
+    offscreenViewport.height = _offscreenFrameBuffers[0]->getExtent().height;
+    offscreenViewport.minDepth = 0.0f;
+    offscreenViewport.maxDepth = 1.0f;
+    vkCmdSetViewport(commandBuffer, 0, 1, &offscreenViewport);
+
+    VkRect2D offscreenScissor{};
+    offscreenScissor.offset = {0, 0};
+    offscreenScissor.extent = _offscreenFrameBuffers[0]->getExtent();
+    vkCmdSetScissor(commandBuffer, 0, 1, &offscreenScissor);
+
+    _glowPipeline->bind(commandBuffer);
+    for(int m=0; m<static_cast<int>(_glowModels.size()); m++) {
+        VkBuffer vertexBuffers[] = {_glowModels[m]->getDeviceMesh()->getVertexBuffer()};
+        VkDeviceSize offsets[] = {0};
+        vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets); // We can have multiple vertex buffers
+        vkCmdBindIndexBuffer(commandBuffer, _glowModels[m]->getDeviceMesh()->getIndexBuffer(), 0, VK_INDEX_TYPE_UINT32); // We can only use one index buffer at a time
+
+        std::array<VkDescriptorSet, 1> descriptorSets = {
+            _sceneDescriptorSets[_currentFrame]->getDescriptorSet()  // Per-frame descriptor set
+        };
+        vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, _glowPipeline->getPipelineLayout(), 0, 1, descriptorSets.data(), 0, nullptr);
+
+        // Push constants for model
+        GlowPassPushConstants pushConstants{};
+        pushConstants.model = _glowModels[m]->getModelMatrix();
+        pushConstants.glowColor = _glowModels[m]->glowColor;
+        vkCmdPushConstants(commandBuffer, _glowPipeline->getPipelineLayout(), VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(GlowPassPushConstants), &pushConstants);
+
+        vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(_glowModels[m]->getDeviceMesh()->getIndicesCount()), 1, 0, 0, 0);
+    }
+    vkCmdEndRenderPass(commandBuffer);
+
+    /*
+        Second pass (Vertical Blur): Apply vertical blur to the glow pass output
+    */
+    renderPassBeginInfo.framebuffer = _offscreenFrameBuffers[1]->getFrameBuffer();
+    vkCmdBeginRenderPass(commandBuffer, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+    _blurVertPipeline->bind(commandBuffer);
+    std::array<VkDescriptorSet, 1> blurVertDescriptorSets = {
+        _blurVertDescriptorSet->getDescriptorSet()                 // Blur descriptor set
+    };
+    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, _blurVertPipeline->getPipelineLayout(), 0, 1, blurVertDescriptorSets.data(), 0, nullptr);
+
+    vkCmdDraw(commandBuffer, 3, 1, 0, 0); // Draw a full-screen triangle for the blur pass
+    vkCmdEndRenderPass(commandBuffer);
+
+
+    /*
+        Third pass (Horizontal Blur): Apply horizontal blur to the vertical blur output
+    */
+    renderPassBeginInfo.framebuffer = _offscreenFrameBuffers[2]->getFrameBuffer();
+    renderPassBeginInfo.renderArea.extent = _offscreenFrameBuffers[2]->getExtent();
+    offscreenViewport.width = _offscreenFrameBuffers[2]->getExtent().width;
+    offscreenViewport.height = _offscreenFrameBuffers[2]->getExtent().height;
+    vkCmdSetViewport(commandBuffer, 0, 1, &offscreenViewport);
+    offscreenScissor.extent = _offscreenFrameBuffers[2]->getExtent();
+    vkCmdSetScissor(commandBuffer, 0, 1, &offscreenScissor);
+    vkCmdBeginRenderPass(commandBuffer, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+    _blurHorizPipeline->bind(commandBuffer);
+    std::array<VkDescriptorSet, 1> blurHorizDescriptorSets = {
+        _blurHorizDescriptorSet->getDescriptorSet()                 // Blur descriptor set
+    };
+    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, _blurHorizPipeline->getPipelineLayout(), 0, 1, blurHorizDescriptorSets.data(), 0, nullptr);
+
+    vkCmdDraw(commandBuffer, 3, 1, 0, 0); // Draw a full-screen triangle for the blur pass
+    vkCmdEndRenderPass(commandBuffer);
+
+
+    /*
+        Fourth pass (Normal Shading)
+    */
+    VkRenderPassBeginInfo mainRenderPassBeginInfo{};
+    mainRenderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+    mainRenderPassBeginInfo.renderPass = _offscreenRenderPassMSAA;
+    mainRenderPassBeginInfo.framebuffer = _offscreenFrameBuffers[3]->getFrameBuffer();
+    mainRenderPassBeginInfo.renderArea.offset = { 0, 0 };
+    mainRenderPassBeginInfo.renderArea.extent = _swapChain->getSwapChainExtent();
+    mainRenderPassBeginInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
+    mainRenderPassBeginInfo.pClearValues = clearValues.data();
+
+    vkCmdBeginRenderPass(commandBuffer, &mainRenderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+    VkViewport viewport{};
+    viewport.x = 0.0f;
+    viewport.y = 0.0f;
+    viewport.width = (float) _swapChain->getSwapChainExtent().width;
+    viewport.height = (float) _swapChain->getSwapChainExtent().height;
+    viewport.minDepth = 0.0f;
+    viewport.maxDepth = 1.0f;
+    vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
+
+    VkRect2D scissor{};
+    scissor.offset = {0, 0};
+    scissor.extent = _swapChain->getSwapChainExtent();
+    vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
+
+    // Draw sun model (TODO: this can be indside the Model class .draw() method)
+    // Bind pipeline
+    _sunPipeline->bind(commandBuffer);
+
+    // Bind vertex and index buffers
+    VkBuffer vertexBuffers[] = {_sunModel->getDeviceMesh()->getVertexBuffer()};
+    VkDeviceSize offsets[] = {0};
+    vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets); // We can have multiple vertex buffers
+    vkCmdBindIndexBuffer(commandBuffer, _sunModel->getDeviceMesh()->getIndexBuffer(), 0, VK_INDEX_TYPE_UINT32); // We can only use one index buffer at a time
+
+    // Bind descriptor sets
+    std::array<VkDescriptorSet, 2> sunDescriptorSets = {
+        _sceneDescriptorSets[_currentFrame]->getDescriptorSet(),  // Per-frame descriptor set
+        _sunModel->getDescriptorSet()->getDescriptorSet()          // Per-model descriptor set
+    };
+    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, _sunPipeline->getPipelineLayout(), 0, 2, sunDescriptorSets.data(), 0, nullptr);
+
+    // Push constants for model
+    PushConstants pushConstants{};
+    pushConstants.model = _sunModel->getModelMatrix();
+    pushConstants.objectID = _sunModel->getID();
+    vkCmdPushConstants(commandBuffer, _sunPipeline->getPipelineLayout(), VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConstants), &pushConstants);
+
+    // Draw
+    vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(_sunModel->getDeviceMesh()->getIndicesCount()), 1, 0, 0, 0);
+
+
+    // Iterate over planets
+    _pipeline->bind(commandBuffer);
+    for(int m=0; m<static_cast<int>(_planetModels.size()); m++) {
+        VkBuffer vertexBuffers[] = {_planetModels[m]->getDeviceMesh()->getVertexBuffer()};
+        VkDeviceSize offsets[] = {0};
+        vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets); // We can have multiple vertex buffers
+        vkCmdBindIndexBuffer(commandBuffer, _planetModels[m]->getDeviceMesh()->getIndexBuffer(), 0, VK_INDEX_TYPE_UINT32); // We can only use one index buffer at a time
+
+        std::array<VkDescriptorSet, 2> descriptorSets = {
+            _sceneDescriptorSets[_currentFrame]->getDescriptorSet(),  // Per-frame descriptor set
+            _planetModels[m]->getDescriptorSet()->getDescriptorSet()  // Per-model descriptor set
+        };
+        vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, _pipeline->getPipelineLayout(), 0, 2, descriptorSets.data(), 0, nullptr);
+
+        // Push constants for model
+        PushConstants pushConstants{};
+        pushConstants.model = _planetModels[m]->getModelMatrix();
+        vkCmdPushConstants(commandBuffer, _pipeline->getPipelineLayout(), VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConstants), &pushConstants);
+
+        vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(_planetModels[m]->getDeviceMesh()->getIndicesCount()), 1, 0, 0, 0);
+    }
+    
+
+
+
+    vkCmdEndRenderPass(commandBuffer);
+
+    /*
+        Fifth pass (Composite): Combine the normal rendering with the glow pass
+    */
+    VkRenderPassBeginInfo compositeRenderPassBeginInfo{};
+    compositeRenderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+    compositeRenderPassBeginInfo.renderPass = _renderPass;
+    compositeRenderPassBeginInfo.framebuffer = _mainFrameBuffers[imageIndex]->getFrameBuffer();
+    compositeRenderPassBeginInfo.renderArea.offset = { 0, 0 };
+    compositeRenderPassBeginInfo.renderArea.extent = _swapChain->getSwapChainExtent();
+    compositeRenderPassBeginInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
+    compositeRenderPassBeginInfo.pClearValues = clearValues.data();
+
+    vkCmdBeginRenderPass(commandBuffer, &compositeRenderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+    vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
+    vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
+
+    // Bind the composite pipeline
+    _compositePipeline->bind(commandBuffer);
+
+    // Bind the descriptor set for the composite pass
+    std::array<VkDescriptorSet, 1> compositeDescriptorSets = {
+        _compositeDescriptorSet->getDescriptorSet() // Composite descriptor set
+    };
+    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, _compositePipeline->getPipelineLayout(), 0, 1, compositeDescriptorSets.data(), 0, nullptr);
+
+    // Draw a full-screen quad for the composite pass
+    vkCmdDraw(commandBuffer, 3, 1, 0, 0); // Draw a full-screen triangle for the composite pass
+    vkCmdEndRenderPass(commandBuffer);
+
+    if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {
+        spdlog::error("Failed to record command buffer!");
+        return;
+    }
+}
+
 
 void Renderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex) {
     VkCommandBufferBeginInfo beginInfo{};
@@ -832,7 +1293,7 @@ void Renderer::drawFrame() {
     // Update uniform buffer
     updateUniformBuffer(_currentFrame);
 
-    recordCommandBuffer(_commandBuffers[_currentFrame], imageIndex);
+    recordBloomCommandBuffer(_commandBuffers[_currentFrame], imageIndex);
 
     VkSubmitInfo submitInfo{};
     submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;

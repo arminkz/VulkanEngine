@@ -87,7 +87,7 @@ void GUI::initResources(VkRenderPass renderPass, VkSampleCountFlagBits msaaSampl
     PipelineParams imguiPipelineParams;
     imguiPipelineParams.name = "ImGui";
     imguiPipelineParams.descriptorSetLayouts = { _descriptorSet->getDescriptorSetLayout() };
-    imguiPipelineParams.pushConstantRange = pcRange;
+    imguiPipelineParams.pushConstantRanges = { pcRange };
     imguiPipelineParams.renderPass = renderPass;
 
     imguiPipelineParams.cullMode = VK_CULL_MODE_NONE;

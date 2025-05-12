@@ -2,12 +2,13 @@
 
 
 FrameBuffer::FrameBuffer(std::shared_ptr<VulkanContext> ctx, const FrameBufferParams& params)
-    : _ctx(std::move(ctx))
+    : _ctx(std::move(ctx)), _extent(params.extent)
 {
     if (params.hasColor) {
         if (params.colorImageView != VK_NULL_HANDLE) {
             _colorImageView = params.colorImageView;
         } else {
+            _usingInternalColor = true;
             createColorResources(params.extent, params.colorFormat, params.msaaSamples, params.colorUsage);
         }
     }
@@ -16,12 +17,18 @@ FrameBuffer::FrameBuffer(std::shared_ptr<VulkanContext> ctx, const FrameBufferPa
         if (params.depthImageView != VK_NULL_HANDLE) {
             _depthImageView = params.depthImageView;
         } else {
+            _usingInternalDepth = true;
             createDepthResources(params.extent, params.depthFormat, params.msaaSamples, params.depthUsage);
         }
     }
 
     if (params.hasResolve) {
-        _resolveImageView = params.resolveImageView;
+        if (params.resolveImageView != VK_NULL_HANDLE) {
+            _resolveImageView = params.resolveImageView;
+        } else {
+            _usingInternalResolve = true;
+            createResolveResources(params.extent, params.resolveFormat, params.resolveUsage);
+        }
     }
 
     std::vector<VkImageView> attachments;
@@ -52,13 +59,23 @@ FrameBuffer::FrameBuffer(std::shared_ptr<VulkanContext> ctx, const FrameBufferPa
 FrameBuffer::~FrameBuffer() {
     vkDestroyFramebuffer(_ctx->device, _frameBuffer, nullptr);
 
-    vkDestroyImageView(_ctx->device, _colorImageView, nullptr);
-    vkDestroyImage(_ctx->device, _colorImage, nullptr);
-    vkFreeMemory(_ctx->device, _colorImageMemory, nullptr);
+    if(_usingInternalColor) {
+        vkDestroyImageView(_ctx->device, _colorImageView, nullptr);
+        vkDestroyImage(_ctx->device, _colorImage, nullptr);
+        vkFreeMemory(_ctx->device, _colorImageMemory, nullptr);
+    }
 
-    vkDestroyImageView(_ctx->device, _depthImageView, nullptr);
-    vkDestroyImage(_ctx->device, _depthImage, nullptr);
-    vkFreeMemory(_ctx->device, _depthImageMemory, nullptr);
+    if(_usingInternalDepth) {
+        vkDestroyImageView(_ctx->device, _depthImageView, nullptr);
+        vkDestroyImage(_ctx->device, _depthImage, nullptr);
+        vkFreeMemory(_ctx->device, _depthImageMemory, nullptr);
+    }
+
+    if(_usingInternalResolve) {
+        vkDestroyImageView(_ctx->device, _resolveImageView, nullptr);
+        vkDestroyImage(_ctx->device, _resolveImage, nullptr);
+        vkFreeMemory(_ctx->device, _resolveImageMemory, nullptr);
+    }
 }
 
 void FrameBuffer::createColorResources(VkExtent2D extent, VkFormat format, VkSampleCountFlagBits msaaSamples, VkImageUsageFlags usage) {
@@ -75,4 +92,12 @@ void FrameBuffer::createDepthResources(VkExtent2D extent, VkFormat format, VkSam
         VK_IMAGE_TILING_OPTIMAL, usage, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, _depthImage, _depthImageMemory);
 
     _depthImageView = VulkanHelper::createImageView(_ctx, _depthImage, format, 1, VK_IMAGE_ASPECT_DEPTH_BIT);
+}
+
+void FrameBuffer::createResolveResources(VkExtent2D extent, VkFormat format, VkImageUsageFlags usage) {
+
+    VulkanHelper::createImage(_ctx, extent.width, extent.height, format, 1, VK_SAMPLE_COUNT_1_BIT,
+        VK_IMAGE_TILING_OPTIMAL, usage, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, _resolveImage, _resolveImageMemory);
+
+    _resolveImageView = VulkanHelper::createImageView(_ctx, _resolveImage, format, 1, VK_IMAGE_ASPECT_COLOR_BIT);
 }

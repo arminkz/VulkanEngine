@@ -1,6 +1,6 @@
 #include "TextureSampler.h"
 
-TextureSampler::TextureSampler(std::shared_ptr<VulkanContext> ctx, uint32_t mipLevels)
+TextureSampler::TextureSampler(std::shared_ptr<VulkanContext> ctx, uint32_t mipLevels, VkSamplerAddressMode addressMode)
     : _ctx(std::move(ctx))
 {
     // Retrieve the physical device properties for the texture sampler
@@ -12,9 +12,9 @@ TextureSampler::TextureSampler(std::shared_ptr<VulkanContext> ctx, uint32_t mipL
     samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
     samplerInfo.magFilter = VK_FILTER_LINEAR;
     samplerInfo.minFilter = VK_FILTER_LINEAR;
-    samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-    samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-    samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    samplerInfo.addressModeU = addressMode;
+    samplerInfo.addressModeV = addressMode;
+    samplerInfo.addressModeW = addressMode;
     samplerInfo.anisotropyEnable = VK_TRUE;
     samplerInfo.maxAnisotropy = properties.limits.maxSamplerAnisotropy;
     samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;

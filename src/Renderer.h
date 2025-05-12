@@ -88,16 +88,39 @@ private:
     void createObjectSelectionFrameBuffer();
 
     void recreateObjectSelectionResources(); 
+    
+    
+    // Glow pass
+    struct GlowPassPushConstants {
+        alignas(16) glm::mat4 model;
+        alignas(16) glm::vec3 glowColor;
+    } _glowPushConstants;
+    std::unique_ptr<Pipeline> _glowPipeline;
+    std::vector<std::shared_ptr<DeviceModel>> _glowModels;
 
 
-    // Bloom
+    // Blur pass
     struct BlurSettings {
-        float blurScale = 1.0f;
-        float blurStrength = 1.5f;
-    };
+        float blurScale = 3.0f;
+        float blurStrength = 2.f;
+    } blurSettings;
+    std::unique_ptr<UniformBuffer<BlurSettings>> _blurSettingsUBO;
+    std::unique_ptr<TextureSampler> _postprocessingTextureSampler;
     std::unique_ptr<Pipeline> _blurVertPipeline;
     std::unique_ptr<Pipeline> _blurHorizPipeline;
+    std::unique_ptr<DescriptorSet> _blurVertDescriptorSet;
+    std::unique_ptr<DescriptorSet> _blurHorizDescriptorSet;
 
+    std::unique_ptr<Pipeline> _compositePipeline;
+    std::unique_ptr<DescriptorSet> _compositeDescriptorSet;
+
+
+
+    VkRenderPass _offscreenRenderPass;
+    VkRenderPass _offscreenRenderPassMSAA;
+    void createOffscreenRenderPasses();
+    std::vector<std::unique_ptr<FrameBuffer>> _offscreenFrameBuffers;
+    void createOffscreenFrameBuffers();
 
 
 
@@ -114,6 +137,8 @@ private:
     
     bool createCommandBuffers();
     void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
+
+    void recordBloomCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 
     bool createSyncObjects();
 

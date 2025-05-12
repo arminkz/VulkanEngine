@@ -47,8 +47,8 @@ void Pipeline::createPipelineLayout(const PipelineParams& params)
     pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
     pipelineLayoutInfo.setLayoutCount = static_cast<uint32_t>(params.descriptorSetLayouts.size());
     pipelineLayoutInfo.pSetLayouts = params.descriptorSetLayouts.data(); // Use the descriptor set layout from the params
-    pipelineLayoutInfo.pushConstantRangeCount = 1;
-    pipelineLayoutInfo.pPushConstantRanges = &params.pushConstantRange; // Use the push constant range from the params
+    pipelineLayoutInfo.pushConstantRangeCount =  static_cast<uint32_t>(params.pushConstantRanges.size());
+    pipelineLayoutInfo.pPushConstantRanges = params.pushConstantRanges.data(); // Use the push constant range from the params
 
     if (vkCreatePipelineLayout(_ctx->device, &pipelineLayoutInfo, nullptr, &_pipelineLayout) != VK_SUCCESS) {
         spdlog::error("Failed to create pipeline layout!");
@@ -73,6 +73,9 @@ void Pipeline::createGraphicsPipeline(const std::string& vertShaderPath, const s
     vertShaderStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
     vertShaderStageInfo.module = vertShaderModule;
     vertShaderStageInfo.pName = "main";
+    if (params.vertexShaderSpecializationInfo.has_value()) {
+        vertShaderStageInfo.pSpecializationInfo = &params.vertexShaderSpecializationInfo.value();
+    }
 
     // Create fragment shader stage info
     VkPipelineShaderStageCreateInfo fragShaderStageInfo{};
@@ -80,6 +83,9 @@ void Pipeline::createGraphicsPipeline(const std::string& vertShaderPath, const s
     fragShaderStageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
     fragShaderStageInfo.module = fragShaderModule;
     fragShaderStageInfo.pName = "main";
+    if (params.fragmentShaderSpecializationInfo.has_value()) {
+        fragShaderStageInfo.pSpecializationInfo = &params.fragmentShaderSpecializationInfo.value();
+    }
 
     VkPipelineShaderStageCreateInfo shaderStages[] = {vertShaderStageInfo, fragShaderStageInfo};
 
@@ -87,10 +93,13 @@ void Pipeline::createGraphicsPipeline(const std::string& vertShaderPath, const s
     // This is where we specify the vertex input format (e.g., position, color, texture coordinates, etc.)
     VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
     vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-    // auto bindingDescription = Vertex::getBindingDescription();
-    // auto attributeDescriptions = Vertex::getAttributeDescriptions();
-    vertexInputInfo.vertexBindingDescriptionCount = 1;
-    vertexInputInfo.pVertexBindingDescriptions = &params.vertexBindingDescription;
+    if (params.vertexBindingDescription.has_value()) {
+        vertexInputInfo.vertexBindingDescriptionCount = 1;
+        vertexInputInfo.pVertexBindingDescriptions = &params.vertexBindingDescription.value(); // Use the vertex binding description from the params
+    } else {
+        vertexInputInfo.vertexBindingDescriptionCount = 0;
+        vertexInputInfo.pVertexBindingDescriptions = nullptr; // No binding description provided
+    }
     vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(params.vertexAttributeDescriptions.size());
     vertexInputInfo.pVertexAttributeDescriptions = params.vertexAttributeDescriptions.data();
 

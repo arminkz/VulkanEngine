@@ -6,12 +6,16 @@
 struct PipelineParams
 {
     std::vector<VkDescriptorSetLayout> descriptorSetLayouts;
-    VkPushConstantRange pushConstantRange;
+    std::vector<VkPushConstantRange> pushConstantRanges;
     VkRenderPass renderPass;
 
     // Vertex Bindings and Attributes
-    VkVertexInputBindingDescription vertexBindingDescription = Vertex::getBindingDescription();
+    std::optional<VkVertexInputBindingDescription> vertexBindingDescription = Vertex::getBindingDescription();
     std::vector<VkVertexInputAttributeDescription> vertexAttributeDescriptions = Vertex::getAttributeDescriptions();
+
+    // Vertex and Fragment Shader Specialization Info
+    std::optional<VkSpecializationInfo> vertexShaderSpecializationInfo = std::nullopt;
+    std::optional<VkSpecializationInfo> fragmentShaderSpecializationInfo = std::nullopt;
 
     // Input assembly
     VkPrimitiveTopology topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;

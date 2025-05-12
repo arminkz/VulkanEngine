@@ -13,19 +13,36 @@ if (-not (Test-Path $outputFolder)) {
     New-Item -ItemType Directory -Path $outputFolder
 }
 
-# Go through each shader file
-Get-ChildItem -Path $shaderFolder -File | ForEach-Object {
-    $inputFile = $_.FullName
-    $outputFile = Join-Path $outputFolder ($_.BaseName + "_" + $_.Extension.TrimStart('.') + ".spv")
+# Resolve absolute paths
+$shaderFolderFull = (Resolve-Path $shaderFolder).Path
+$outputFolderFull = (Resolve-Path $outputFolder).Path
 
-    Write-Host "Compiling $($_.Name) -> $($outputFile)..."
+# Recursively find shader files
+Get-ChildItem -Path $shaderFolderFull -Recurse -File | ForEach-Object {
+    $inputFile = $_.FullName
+
+    # Get relative path from shader root folder
+    $relativePath = $inputFile.Substring($shaderFolderFull.Length).TrimStart('\')
+
+    # Get the directory and make sure it exists under output
+    $relativeDir = Split-Path $relativePath
+    $targetDir = Join-Path $outputFolderFull $relativeDir
+    if (-not (Test-Path $targetDir)) {
+        New-Item -ItemType Directory -Path $targetDir -Force | Out-Null
+    }
+
+    # Build output filename (e.g., myshader_vert.spv)
+    $outputFileName = ($_.BaseName + "_" + $_.Extension.TrimStart('.') + ".spv")
+    $outputFile = Join-Path $targetDir $outputFileName
+
+    Write-Host "Compiling $relativePath -> $($outputFile.Substring($outputFolderFull.Length + 1))..."
 
     & $glslcPath $inputFile -o $outputFile
 
     if ($LASTEXITCODE -ne 0) {
-        Write-Host "Failed to compile $($_.Name)" -ForegroundColor Red
+        Write-Host "Failed to compile $relativePath" -ForegroundColor Red
     } else {
-        Write-Host "Successfully compiled $($_.Name)" -ForegroundColor Green
+        Write-Host "Successfully compiled $relativePath" -ForegroundColor Green
     }
 }
 

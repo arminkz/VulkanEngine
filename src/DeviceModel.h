@@ -61,6 +61,9 @@ public:
 
     void drawGUI();
 
+    bool hasGlow = false;
+    glm::vec3 glowColor = glm::vec3(1.f, 1.f, 1.f);
+
 private:
     static int objectIDCounter;
     int _objectID;
