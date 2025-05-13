@@ -40,6 +40,8 @@ public:
     const UniformBuffer<AtmosphereInfo>* getAtmosphereInfoUBO() const { return _atmosphereUBO.get(); }
     const DescriptorSet* getDescriptorSet() const { return _descriptorSet.get(); }
 
+    glm::vec3 glowColor = glm::vec3(0.f, 0.f, 0.f);
+
 private:
     std::shared_ptr<VulkanContext> _ctx;
     

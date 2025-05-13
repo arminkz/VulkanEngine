@@ -5,7 +5,7 @@ int main(int argc, char* argv[]) {
     //Create a window
     try{
         Window window;
-        if (!window.initialize("VulkanEngine", 600, 600)) return EXIT_FAILURE;
+        if (!window.initialize("VulkanEngine", 1800, 900)) return EXIT_FAILURE;
 
         // Start the rendering loop
         window.startRenderingLoop();

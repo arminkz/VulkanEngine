@@ -134,7 +134,7 @@ void main() {
     float n = fBm(st+q+vec3(1.82,1.32,1.09), 5.);
 
     vec3 color = vec3(0.);
-    color = mix(vec3(1.,0.4,0.), vec3(1.,1.,1.), n*n);
-    color = mix(color, vec3(1.,0.,0.), q);
-    outColor = vec4(1.6*color, 1.);
+    color = mix(vec3(1., 0.2, 0.), vec3(1., .8, .0), n*n);
+    color = mix(color, vec3(1., 0., 0.), q);
+    outColor = vec4(color, 1.);
 }

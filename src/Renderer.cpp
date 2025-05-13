@@ -97,28 +97,28 @@ bool Renderer::initialize()
     std::shared_ptr<DeviceMesh> quadDMesh = std::make_shared<DeviceMesh>(_ctx, quad);
 
     float orbitRadMercury = 10.f;
-    float orbitRadVenus = 15.f;
-    float orbitRadEarth = 20.f;
-    float orbitRadMoon = 6.f;
-    float orbitRadMars = 28.f;
-    float orbitRadJupiter = 52.f;
-    float orbitRadSaturn = 75.f;
-    float orbitRadUranus = 100.f;
-    float orbitRadNeptune = 130.f;
-    float orbitRadPluto = 160.f;
+    float orbitRadVenus = 13.f;
+    float orbitRadEarth = 16.f;
+    //float orbitRadMoon = 163.f;
+    float orbitRadMars = 22.f;
+    float orbitRadJupiter = 47.f;
+    float orbitRadSaturn = 77.f;
+    float orbitRadUranus = 119.f;
+    float orbitRadNeptune = 139.f;
+    float orbitRadPluto = 155.f;
 
     float sizeSun = 3.f;
-    float sizeMercury = 0.5f;
-    float sizeVenus = 0.8f;
-    float sizeEarth = 1.f;
-    float sizeMoon = 0.3f;
-    float sizeMars = 0.6f;
-    float sizeJupiter = 1.5f;
-    float sizeSaturn = 1.2f;
+    float sizeMercury = 0.21f;
+    float sizeVenus = 0.48f;
+    float sizeEarth = 0.54f;
+    //float sizeMoon = 0.0048f;
+    float sizeMars = 0.36f;
+    float sizeJupiter = 0.8f;
+    float sizeSaturn = 0.7f;
     float sizeSaturnRing = 1.2f * sizeSaturn;
-    float sizeUranus = 1.0f;
-    float sizeNeptune = 1.0f;
-    float sizePluto = 0.4f;
+    float sizeUranus = 0.4f;
+    float sizeNeptune = 0.4f;
+    float sizePluto = 0.2f;
 
     // SkySphere
     std::shared_ptr<DeviceTexture> skyTexture = std::make_shared<DeviceTexture>(_ctx, "textures/8k_stars_milky_way.jpg", VK_FORMAT_R8G8B8A8_SRGB);
@@ -138,18 +138,20 @@ bool Renderer::initialize()
     std::shared_ptr<DeviceModel> sun = std::make_shared<DeviceModel>("Sun", _ctx, sphereDMesh, sunModelMat, sunTexture, nullptr, nullptr, nullptr, sunPerlinTexture, _textureSampler);
     sun->material.sunShadeMode = 1;
     sun->updateMaterial();
+    sun->glowColor = glm::vec3(1.f, 0.3f, 0.0f);
     _sunModel = sun;
     // Sun is selectable
     _selectableObjects[sun->getID()] = sun;
     // Sun is a light source
-    _sunModel->glowColor = glm::vec3(1.f, 0.8f, 0.5f);
     _allModels.push_back(sun);
 
     //Sun atmosphere
     glm::mat4 sunAtmosphereModelMat = glm::mat4(1.f);
-    sunAtmosphereModelMat = glm::scale(sunAtmosphereModelMat, glm::vec3(sizeSun * 1.2f));
-    std::shared_ptr<AtmosphereModel> sunAtmosphere = std::make_shared<AtmosphereModel>(_ctx, sphereDMesh, sunAtmosphereModelMat, glm::vec3(1.f, 0.8f, 0.5f), 1.f, 4.0f, true);
+    sunAtmosphereModelMat = glm::scale(sunAtmosphereModelMat, glm::vec3(sizeSun * 1.3f));
+    std::shared_ptr<AtmosphereModel> sunAtmosphere = std::make_shared<AtmosphereModel>(_ctx, sphereDMesh, sunAtmosphereModelMat, glm::vec3(1.f, 0.3f, 0.0f), 0.4f, 2.0f, true);
     _atmosphereModels.push_back(sunAtmosphere);
+    //_sunGlowModel = sunAtmosphere;
+    //_allModels.push_back(sunAtmosphere);
 
     // Mercury
     std::shared_ptr<DeviceTexture> mercuryColorTexture = std::make_shared<DeviceTexture>(_ctx, "textures/mercury/8k_mercury.jpg", VK_FORMAT_R8G8B8A8_SRGB);
@@ -179,6 +181,12 @@ bool Renderer::initialize()
     _selectableObjects[venus->getID()] = venus;
     _allModels.push_back(venus);
 
+    // Venus Orbit
+    glm::mat4 venusOrbitModelMat = glm::mat4(1.f);
+    venusOrbitModelMat = glm::scale(venusOrbitModelMat, glm::vec3(orbitRadVenus * 2.f));
+    venusOrbitModelMat = glm::rotate(venusOrbitModelMat, glm::radians(90.f), glm::vec3(1.f, 0.f, 0.f));
+    _orbitModels.push_back(std::make_shared<DeviceModel>("venus_orbit", _ctx, quadDMesh, venusOrbitModelMat, nullptr, nullptr, nullptr, nullptr, nullptr, _textureSampler));
+
     // Earth
     std::shared_ptr<DeviceTexture> colorTexture = std::make_shared<DeviceTexture>(_ctx, "textures/earth/10k_earth_day.jpg", VK_FORMAT_R8G8B8A8_SRGB);
     std::shared_ptr<DeviceTexture> unlitTexture = std::make_shared<DeviceTexture>(_ctx, "textures/earth/10k_earth_night.jpg", VK_FORMAT_R8G8B8A8_SRGB);
@@ -206,26 +214,26 @@ bool Renderer::initialize()
     earthAtmosphereModelMat = glm::scale(earthAtmosphereModelMat, glm::vec3(sizeEarth * 1.03f));
     _atmosphereModels.push_back(std::make_shared<AtmosphereModel>(_ctx, sphereDMesh, earthAtmosphereModelMat, glm::vec3(0.45f, 0.55f, 1.f), 3.f, 3.0, false));
 
-    // Moon
-    std::shared_ptr<DeviceTexture> moonColorTexture = std::make_shared<DeviceTexture>(_ctx, "textures/moon/8k_moon.jpg", VK_FORMAT_R8G8B8A8_SRGB);
-    glm::mat4 moonModelMat = glm::mat4(1.f);
-    moonModelMat = glm::translate(glm::mat4(1.f), glm::vec3(orbitRadEarth + orbitRadMoon, 0.f, 0.f));
-    moonModelMat = glm::scale(moonModelMat, glm::vec3(sizeMoon));
-    std::shared_ptr<DeviceModel> moon = std::make_shared<DeviceModel>("Moon", _ctx, sphereDMesh, moonModelMat, moonColorTexture, nullptr, nullptr, nullptr, nullptr, _textureSampler);
-    _planetModels.push_back(moon);
-    // Moon is selectable
-    _selectableObjects[moon->getID()] = moon;
-    _allModels.push_back(moon);
+    // // Moon
+    // std::shared_ptr<DeviceTexture> moonColorTexture = std::make_shared<DeviceTexture>(_ctx, "textures/moon/8k_moon.jpg", VK_FORMAT_R8G8B8A8_SRGB);
+    // glm::mat4 moonModelMat = glm::mat4(1.f);
+    // moonModelMat = glm::translate(glm::mat4(1.f), glm::vec3(orbitRadEarth + orbitRadMoon, 0.f, 0.f));
+    // moonModelMat = glm::scale(moonModelMat, glm::vec3(sizeMoon));
+    // std::shared_ptr<DeviceModel> moon = std::make_shared<DeviceModel>("Moon", _ctx, sphereDMesh, moonModelMat, moonColorTexture, nullptr, nullptr, nullptr, nullptr, _textureSampler);
+    // _planetModels.push_back(moon);
+    // // Moon is selectable
+    // _selectableObjects[moon->getID()] = moon;
+    // _allModels.push_back(moon);
 
-    // Moon Orbit
-    glm::mat4 moonOrbitModelMat = glm::mat4(1.f);
-    moonOrbitModelMat = glm::translate(moonOrbitModelMat, glm::vec3(sizeEarth, 0.f, 0.f));
-    moonOrbitModelMat = glm::scale(moonOrbitModelMat, glm::vec3(orbitRadMoon * 2.f));
-    moonOrbitModelMat = glm::rotate(moonOrbitModelMat, glm::radians(90.f), glm::vec3(1.f, 0.f, 0.f));
-    _orbitModels.push_back(std::make_shared<DeviceModel>("moon_orbit", _ctx, quadDMesh, moonOrbitModelMat, nullptr, nullptr, nullptr, nullptr, nullptr, _textureSampler));
+    // // Moon Orbit
+    // glm::mat4 moonOrbitModelMat = glm::mat4(1.f);
+    // moonOrbitModelMat = glm::translate(moonOrbitModelMat, glm::vec3(sizeEarth, 0.f, 0.f));
+    // moonOrbitModelMat = glm::scale(moonOrbitModelMat, glm::vec3(orbitRadMoon * 2.f));
+    // moonOrbitModelMat = glm::rotate(moonOrbitModelMat, glm::radians(90.f), glm::vec3(1.f, 0.f, 0.f));
+    // _orbitModels.push_back(std::make_shared<DeviceModel>("moon_orbit", _ctx, quadDMesh, moonOrbitModelMat, nullptr, nullptr, nullptr, nullptr, nullptr, _textureSampler));
 
     // Mars
-    std::shared_ptr<DeviceTexture> marsColorTexture = std::make_shared<DeviceTexture>(_ctx, "textures/8k_mars.jpg", VK_FORMAT_R8G8B8A8_SRGB);
+    std::shared_ptr<DeviceTexture> marsColorTexture = std::make_shared<DeviceTexture>(_ctx, "textures/mars/8k_mars.jpg", VK_FORMAT_R8G8B8A8_SRGB);
     glm::mat4 marsModelMat = glm::mat4(1.f);
     marsModelMat = glm::translate(glm::mat4(1.f), glm::vec3(orbitRadMars, 0.f, 0.f));
     marsModelMat = glm::scale(marsModelMat, glm::vec3(sizeMars));
@@ -241,11 +249,28 @@ bool Renderer::initialize()
     marsOrbitModelMat = glm::rotate(marsOrbitModelMat, glm::radians(90.f), glm::vec3(1.f, 0.f, 0.f));
     _orbitModels.push_back(std::make_shared<DeviceModel>("mars_orbit", _ctx, quadDMesh, marsOrbitModelMat, nullptr, nullptr, nullptr, nullptr, nullptr, _textureSampler));
 
+    // Jupiter
+    std::shared_ptr<DeviceTexture> jupiterColorTexture = std::make_shared<DeviceTexture>(_ctx, "textures/jupiter/4k_jupiter.jpg", VK_FORMAT_R8G8B8A8_SRGB);
+    glm::mat4 jupiterModelMat = glm::mat4(1.f);
+    jupiterModelMat = glm::translate(glm::mat4(1.f), glm::vec3(orbitRadJupiter, 0.f, 0.f));
+    jupiterModelMat = glm::scale(jupiterModelMat, glm::vec3(sizeJupiter));
+    std::shared_ptr<DeviceModel> jupiter = std::make_shared<DeviceModel>("Jupiter", _ctx, sphereDMesh, jupiterModelMat, jupiterColorTexture, nullptr, nullptr, nullptr, nullptr, _textureSampler);
+    _planetModels.push_back(jupiter);
+    // Jupiter is selectable
+    _selectableObjects[jupiter->getID()] = jupiter;
+    _allModels.push_back(jupiter);
+
+    // Jupiter Orbit
+    glm::mat4 jupiterOrbitModelMat = glm::mat4(1.f);
+    jupiterOrbitModelMat = glm::scale(jupiterOrbitModelMat, glm::vec3(orbitRadJupiter * 2.f));
+    jupiterOrbitModelMat = glm::rotate(jupiterOrbitModelMat, glm::radians(90.f), glm::vec3(1.f, 0.f, 0.f));
+    _orbitModels.push_back(std::make_shared<DeviceModel>("jupiter_orbit", _ctx, quadDMesh, jupiterOrbitModelMat, nullptr, nullptr, nullptr, nullptr, nullptr, _textureSampler));
+
     // Saturn
     std::shared_ptr<DeviceTexture> saturnColorTexture = std::make_shared<DeviceTexture>(_ctx, "textures/saturn/8k_saturn.jpg", VK_FORMAT_R8G8B8A8_SRGB);
     glm::mat4 saturnModelMat = glm::mat4(1.f);
     saturnModelMat = glm::translate(glm::mat4(1.f), glm::vec3(orbitRadSaturn, 0.f, 0.f));
-    saturnModelMat = glm::scale(saturnModelMat, glm::vec3(1.5f));
+    saturnModelMat = glm::scale(saturnModelMat, glm::vec3(sizeSaturn));
     std::shared_ptr<DeviceModel> saturn = std::make_shared<DeviceModel>("Saturn", _ctx, sphereDMesh, saturnModelMat, saturnColorTexture, nullptr, nullptr, nullptr, nullptr, _textureSampler);
     _planetModels.push_back(saturn);
     // Saturn is selectable
@@ -256,7 +281,7 @@ bool Renderer::initialize()
     std::shared_ptr<DeviceTexture> ringTexture = std::make_shared<DeviceTexture>(_ctx, "textures/saturn/8k_saturn_ring_alpha.png", VK_FORMAT_R8G8B8A8_SRGB);
     glm::mat4 ringModelMat = glm::mat4(1.f);
     ringModelMat = glm::translate(glm::mat4(1.f), glm::vec3(orbitRadSaturn, 0.f, 0.f));
-    ringModelMat = glm::scale(ringModelMat, glm::vec3(sizeSaturn));
+    ringModelMat = glm::scale(ringModelMat, glm::vec3(sizeSaturnRing));
     ringModelMat = glm::rotate(ringModelMat, glm::radians(107.f), glm::vec3(1.f, 0.f, 0.f));
     std::shared_ptr<DeviceModel> saturn_ring = std::make_shared<DeviceModel>("SaturnRing", _ctx, ringDMesh, ringModelMat, ringTexture, nullptr, nullptr, nullptr, nullptr, _textureSampler);
     _planetModels.push_back(saturn_ring);
@@ -270,8 +295,27 @@ bool Renderer::initialize()
     saturnOrbitModelMat = glm::rotate(saturnOrbitModelMat, glm::radians(90.f), glm::vec3(1.f, 0.f, 0.f));
     _orbitModels.push_back(std::make_shared<DeviceModel>("saturn_orbit", _ctx, quadDMesh, saturnOrbitModelMat, nullptr, nullptr, nullptr, nullptr, nullptr, _textureSampler));
 
+
+    // Uranus
+    std::shared_ptr<DeviceTexture> uranusColorTexture = std::make_shared<DeviceTexture>(_ctx, "textures/uranus/1k_uranus.jpg", VK_FORMAT_R8G8B8A8_SRGB);
+    glm::mat4 uranusModelMat = glm::mat4(1.f);
+    uranusModelMat = glm::translate(glm::mat4(1.f), glm::vec3(orbitRadUranus, 0.f, 0.f));
+    uranusModelMat = glm::scale(uranusModelMat, glm::vec3(sizeUranus));
+    std::shared_ptr<DeviceModel> uranus = std::make_shared<DeviceModel>("Uranus", _ctx, sphereDMesh, uranusModelMat, uranusColorTexture, nullptr, nullptr, nullptr, nullptr, _textureSampler);
+    _planetModels.push_back(uranus);
+    // Uranus is selectable
+    _selectableObjects[uranus->getID()] = uranus;
+    _allModels.push_back(uranus);
+
+    // Uranus Orbit
+    glm::mat4 uranusOrbitModelMat = glm::mat4(1.f);
+    uranusOrbitModelMat = glm::scale(uranusOrbitModelMat, glm::vec3(orbitRadUranus * 2.f));
+    uranusOrbitModelMat = glm::rotate(uranusOrbitModelMat, glm::radians(90.f), glm::vec3(1.f, 0.f, 0.f));
+    _orbitModels.push_back(std::make_shared<DeviceModel>("uranus_orbit", _ctx, quadDMesh, uranusOrbitModelMat, nullptr, nullptr, nullptr, nullptr, nullptr, _textureSampler));
+
+
     // Neptune
-    std::shared_ptr<DeviceTexture> neptuneColorTexture = std::make_shared<DeviceTexture>(_ctx, "textures/2k_neptune.jpg", VK_FORMAT_R8G8B8A8_SRGB);
+    std::shared_ptr<DeviceTexture> neptuneColorTexture = std::make_shared<DeviceTexture>(_ctx, "textures/neptune/2k_neptune.jpg", VK_FORMAT_R8G8B8A8_SRGB);
     glm::mat4 neptuneModelMat = glm::mat4(1.f);
     neptuneModelMat = glm::translate(glm::mat4(1.f), glm::vec3(orbitRadNeptune, 0.f, 0.f));
     neptuneModelMat = glm::scale(neptuneModelMat, glm::vec3(sizeNeptune));
@@ -286,6 +330,26 @@ bool Renderer::initialize()
     neptuneOrbitModelMat = glm::scale(neptuneOrbitModelMat, glm::vec3(orbitRadNeptune * 2.f));
     neptuneOrbitModelMat = glm::rotate(neptuneOrbitModelMat, glm::radians(90.f), glm::vec3(1.f, 0.f, 0.f));
     _orbitModels.push_back(std::make_shared<DeviceModel>("neptune_orbit", _ctx, quadDMesh, neptuneOrbitModelMat, nullptr, nullptr, nullptr, nullptr, nullptr, _textureSampler));
+
+
+    // Pluto
+    std::shared_ptr<DeviceTexture> plutoColorTexture = std::make_shared<DeviceTexture>(_ctx, "textures/pluto/2k_pluto.jpg", VK_FORMAT_R8G8B8A8_SRGB);
+    glm::mat4 plutoModelMat = glm::mat4(1.f);
+    plutoModelMat = glm::translate(glm::mat4(1.f), glm::vec3(orbitRadPluto, 0.f, 0.f));
+    plutoModelMat = glm::scale(plutoModelMat, glm::vec3(sizePluto));
+    std::shared_ptr<DeviceModel> pluto = std::make_shared<DeviceModel>("Pluto", _ctx, sphereDMesh, plutoModelMat, plutoColorTexture, nullptr, nullptr, nullptr, nullptr, _textureSampler);
+    _planetModels.push_back(pluto);
+    // Pluto is selectable
+    _selectableObjects[pluto->getID()] = pluto;
+    _allModels.push_back(pluto);
+
+    // Pluto Orbit
+    glm::mat4 plutoOrbitModelMat = glm::mat4(1.f);
+    plutoOrbitModelMat = glm::scale(plutoOrbitModelMat, glm::vec3(orbitRadPluto * 2.f));
+    plutoOrbitModelMat = glm::rotate(plutoOrbitModelMat, glm::radians(90.f), glm::vec3(1.f, 0.f, 0.f));
+    _orbitModels.push_back(std::make_shared<DeviceModel>("pluto_orbit", _ctx, quadDMesh, plutoOrbitModelMat, nullptr, nullptr, nullptr, nullptr, nullptr, _textureSampler));
+
+
 
     // Create Camera
     _currentTargetObjectID = 2; // Sun
@@ -944,6 +1008,7 @@ void Renderer::recordBloomCommandBuffer(VkCommandBuffer commandBuffer, uint32_t 
 
         vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(_allModels[m]->getDeviceMesh()->getIndicesCount()), 1, 0, 0, 0);
     }
+
     vkCmdEndRenderPass(commandBuffer);
 
     /*
@@ -1060,9 +1125,48 @@ void Renderer::recordBloomCommandBuffer(VkCommandBuffer commandBuffer, uint32_t 
 
         vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(_planetModels[m]->getDeviceMesh()->getIndicesCount()), 1, 0, 0, 0);
     }
+
+
+    // Draw atmosphere models
+    _atmospherePipeline->bind(commandBuffer);
+    for(int m=0; m<static_cast<int>(_atmosphereModels.size()); m++) {
+        VkBuffer vertexBuffers[] = {_atmosphereModels[m]->getDeviceMesh()->getVertexBuffer()};
+        VkDeviceSize offsets[] = {0};
+        vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets); // We can have multiple vertex buffers
+        vkCmdBindIndexBuffer(commandBuffer, _atmosphereModels[m]->getDeviceMesh()->getIndexBuffer(), 0, VK_INDEX_TYPE_UINT32); // We can only use one index buffer at a time
+
+        std::array<VkDescriptorSet, 2> descriptorSets = {
+            _sceneDescriptorSets[_currentFrame]->getDescriptorSet(),      // Per-frame descriptor set
+            _atmosphereModels[m]->getDescriptorSet()->getDescriptorSet()  // Per-model descriptor set
+        };
+        vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, _atmospherePipeline->getPipelineLayout(), 0, 2, descriptorSets.data(), 0, nullptr);
+
+        // Push constants for model
+        PushConstants pushConstants{};
+        pushConstants.model = _atmosphereModels[m]->getModelMatrix();
+        vkCmdPushConstants(commandBuffer, _atmospherePipeline->getPipelineLayout(), VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConstants), &pushConstants);
+
+        vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(_atmosphereModels[m]->getDeviceMesh()->getIndicesCount()), 1, 0, 0, 0);
+    }
+
+
+    // Draw orbit models
+    _orbitPipeline->bind(commandBuffer);
+
+    for(int m=0; m<static_cast<int>(_orbitModels.size()); m++) {
+        VkBuffer vertexBuffers[] = {_orbitModels[m]->getDeviceMesh()->getVertexBuffer()};
+        VkDeviceSize offsets[] = {0};
+        vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets); // We can have multiple vertex buffers
+        vkCmdBindIndexBuffer(commandBuffer, _orbitModels[m]->getDeviceMesh()->getIndexBuffer(), 0, VK_INDEX_TYPE_UINT32); // We can only use one index buffer at a time
+
+        std::array<VkDescriptorSet, 1> descriptorSets = {
+            _sceneDescriptorSets[_currentFrame]->getDescriptorSet() // Per-frame descriptor set
+        };
+        vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, _orbitPipeline->getPipelineLayout(), 0, 1, descriptorSets.data(), 0, nullptr);
+        vkCmdPushConstants(commandBuffer, _orbitPipeline->getPipelineLayout(), VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(glm::mat4), &_orbitModels[m]->getModelMatrix());
+        vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(_orbitModels[m]->getDeviceMesh()->getIndicesCount()), 1, 0, 0, 0);
+    }
     
-
-
 
     vkCmdEndRenderPass(commandBuffer);
 

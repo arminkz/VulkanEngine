@@ -62,6 +62,7 @@ private:
 
     // Models that need special treatment
     std::shared_ptr<DeviceModel> _sunModel = nullptr;
+    std::shared_ptr<AtmosphereModel> _sunGlowModel = nullptr;
 
 
     // Called when the window is resized
@@ -106,8 +107,8 @@ private:
 
     // Blur pass
     struct BlurSettings {
-        float blurScale = 2.0f;
-        float blurStrength = 1.5f;
+        float blurScale = 3.0f;
+        float blurStrength = 1.f;
     } blurSettings;
     std::unique_ptr<UniformBuffer<BlurSettings>> _blurSettingsUBO;
     std::unique_ptr<TextureSampler> _postprocessingTextureSampler;

@@ -19,7 +19,7 @@ void main() {
     // draw a circle with smooth edges
     vec2 uv = fragTexCoord * 2.0 - 1.0; // Convert to NDC coordinates
     float dist = length(uv);
-    float radius = 0.996;
+    float radius = 1.0;
     float pixelTickness = 0.5;
     float edge = pixelTickness * fwidth(dist);
 
