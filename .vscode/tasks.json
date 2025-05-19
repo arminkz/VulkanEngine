@@ -35,8 +35,8 @@
             "detail": "CMake template build task"
         },
         {
-            "label": "build",
             "type": "shell",
+            "label": "build",
             "command": "cmake",
             "args": [
               "--build", "build", // adjust this if your build directory is named differently
@@ -46,8 +46,8 @@
               "kind": "build",
               "isDefault": true 
             },
-            "problemMatcher": ["$gcc"]
-          }
+            "problemMatcher": ["$msCompile"] // $msCompile is for MSVC, $gcc for GCC
+        }
     ],
     "version": "2.0.0"
 }

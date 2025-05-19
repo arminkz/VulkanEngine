@@ -5,7 +5,7 @@
 $shaderFolder = "shaders"
 
 # Set the path to glslc.exe if it's not in PATH
-$glslcPath = "C:\VulkanSDK\1.3.290.0\Bin\glslc.exe"  # or "glslc"
+$glslcPath = "C:\VulkanSDK\1.4.309.0\Bin\glslc.exe"  # or "glslc"
 
 # Create output folder if it doesn't exist
 $outputFolder = "spv"

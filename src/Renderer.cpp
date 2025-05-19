@@ -63,6 +63,8 @@ Renderer::~Renderer()
     _objectSelectionPipeline = nullptr;
 
     vkDestroyRenderPass(_ctx->device, _renderPass, nullptr);
+    vkDestroyRenderPass(_ctx->device, _offscreenRenderPass, nullptr);
+    vkDestroyRenderPass(_ctx->device, _offscreenRenderPassMSAA, nullptr);
     vkDestroyRenderPass(_ctx->device, _objectSelectionRenderPass, nullptr);
 
     //Destroy dummy texture
@@ -128,7 +130,7 @@ bool Renderer::initialize()
     skySphere->material.ambientStrength = 0.3f;
     skySphere->material.specularStrength = 0.0f;
     skySphere->updateMaterial();
-    _planetModels.push_back(skySphere);
+    _skyBoxModel = skySphere;
 
     //Sun
     std::shared_ptr<DeviceTexture> sunTexture = std::make_shared<DeviceTexture>(_ctx, "textures/8k_sun.jpg", VK_FORMAT_R8G8B8A8_SRGB);
@@ -1077,32 +1079,59 @@ void Renderer::recordBloomCommandBuffer(VkCommandBuffer commandBuffer, uint32_t 
     scissor.extent = _swapChain->getSwapChainExtent();
     vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
+
+    // Draw skybox
+    {
+        _pipeline->bind(commandBuffer);
+
+        VkBuffer vertexBuffers[] = {_skyBoxModel->getDeviceMesh()->getVertexBuffer()};
+        VkDeviceSize offsets[] = {0};
+        vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets); // We can have multiple vertex buffers
+        vkCmdBindIndexBuffer(commandBuffer, _skyBoxModel->getDeviceMesh()->getIndexBuffer(), 0, VK_INDEX_TYPE_UINT32); // We can only use one index buffer at a time
+
+        std::array<VkDescriptorSet, 2> skyboxDescriptorSets = {
+            _sceneDescriptorSets[_currentFrame]->getDescriptorSet(),  // Per-frame descriptor set
+            _skyBoxModel->getDescriptorSet()->getDescriptorSet()       // Per-model descriptor set
+        };
+        vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, _pipeline->getPipelineLayout(), 0, 2, skyboxDescriptorSets.data(), 0, nullptr);
+
+        // Push constants for model
+        PushConstants pushConstants{};
+        pushConstants.model = _skyBoxModel->getModelMatrix();
+        pushConstants.objectID = _skyBoxModel->getID();
+        vkCmdPushConstants(commandBuffer, _pipeline->getPipelineLayout(), VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConstants), &pushConstants);
+
+        // Draw
+        vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(_skyBoxModel->getDeviceMesh()->getIndicesCount()), 1, 0, 0, 0);
+    }
+
     // Draw sun model (TODO: this can be indside the Model class .draw() method)
-    // Bind pipeline
-    _sunPipeline->bind(commandBuffer);
+    {
+        // Bind pipeline
+        _sunPipeline->bind(commandBuffer);
 
-    // Bind vertex and index buffers
-    VkBuffer vertexBuffers[] = {_sunModel->getDeviceMesh()->getVertexBuffer()};
-    VkDeviceSize offsets[] = {0};
-    vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets); // We can have multiple vertex buffers
-    vkCmdBindIndexBuffer(commandBuffer, _sunModel->getDeviceMesh()->getIndexBuffer(), 0, VK_INDEX_TYPE_UINT32); // We can only use one index buffer at a time
+        // Bind vertex and index buffers
+        VkBuffer vertexBuffers[] = {_sunModel->getDeviceMesh()->getVertexBuffer()};
+        VkDeviceSize offsets[] = {0};
+        vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets); // We can have multiple vertex buffers
+        vkCmdBindIndexBuffer(commandBuffer, _sunModel->getDeviceMesh()->getIndexBuffer(), 0, VK_INDEX_TYPE_UINT32); // We can only use one index buffer at a time
 
-    // Bind descriptor sets
-    std::array<VkDescriptorSet, 2> sunDescriptorSets = {
-        _sceneDescriptorSets[_currentFrame]->getDescriptorSet(),  // Per-frame descriptor set
-        _sunModel->getDescriptorSet()->getDescriptorSet()          // Per-model descriptor set
-    };
-    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, _sunPipeline->getPipelineLayout(), 0, 2, sunDescriptorSets.data(), 0, nullptr);
+        // Bind descriptor sets
+        std::array<VkDescriptorSet, 2> sunDescriptorSets = {
+            _sceneDescriptorSets[_currentFrame]->getDescriptorSet(),  // Per-frame descriptor set
+            _sunModel->getDescriptorSet()->getDescriptorSet()          // Per-model descriptor set
+        };
+        vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, _sunPipeline->getPipelineLayout(), 0, 2, sunDescriptorSets.data(), 0, nullptr);
 
-    // Push constants for model
-    PushConstants pushConstants{};
-    pushConstants.model = _sunModel->getModelMatrix();
-    pushConstants.objectID = _sunModel->getID();
-    vkCmdPushConstants(commandBuffer, _sunPipeline->getPipelineLayout(), VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConstants), &pushConstants);
+        // Push constants for model
+        PushConstants pushConstants{};
+        pushConstants.model = _sunModel->getModelMatrix();
+        pushConstants.objectID = _sunModel->getID();
+        vkCmdPushConstants(commandBuffer, _sunPipeline->getPipelineLayout(), VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConstants), &pushConstants);
 
-    // Draw
-    vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(_sunModel->getDeviceMesh()->getIndicesCount()), 1, 0, 0, 0);
-
+        // Draw
+        vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(_sunModel->getDeviceMesh()->getIndicesCount()), 1, 0, 0, 0);
+    }
 
     // Iterate over planets
     _pipeline->bind(commandBuffer);

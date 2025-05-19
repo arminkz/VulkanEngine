@@ -132,6 +132,41 @@ namespace VulkanHelper {
         endSingleTimeCommands(ctx, commandBuffer);
     }
 
+
+    void copyBufferToCubemap(const std::shared_ptr<VulkanContext>& ctx, 
+                             VkBuffer buffer, 
+                             VkImage image, 
+                             uint32_t width, 
+                             uint32_t height) 
+    {
+        VkCommandBuffer commandBuffer = beginSingleTimeCommands(ctx);
+    
+        std::vector<VkBufferImageCopy> regions(6);
+        VkDeviceSize layerSize = width * height * 4; // assuming 4 bytes per pixel (RGBA8)
+
+        for (uint32_t face = 0; face < 6; ++face) {
+            VkBufferImageCopy region{};
+            region.bufferOffset = layerSize * face;
+            region.bufferRowLength = 0; // tightly packed
+            region.bufferImageHeight = 0;
+
+            region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            region.imageSubresource.mipLevel = 0;
+            region.imageSubresource.baseArrayLayer = face;
+            region.imageSubresource.layerCount = 1;
+
+            region.imageOffset = {0, 0, 0};
+            region.imageExtent = {width, height, 1};
+
+            regions[face] = region;
+        }
+
+        vkCmdCopyBufferToImage(commandBuffer, buffer, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, static_cast<uint32_t>(regions.size()), regions.data());
+
+        endSingleTimeCommands(ctx, commandBuffer);
+    }
+
+
     void copyImageToBuffer(const std::shared_ptr<VulkanContext>& ctx, 
                            VkImage image, 
                            VkBuffer buffer, 
@@ -163,12 +198,14 @@ namespace VulkanHelper {
                      uint32_t width,
                      uint32_t height,
                      VkFormat format,
-                     uint32_t mipLevels, 
+                     uint32_t mipLevels,
+                     uint32_t arrayLayers,
                      VkSampleCountFlagBits numSamples, 
                      VkImageTiling tiling, 
                      VkImageUsageFlags usage, 
                      VkMemoryPropertyFlags properties, 
-                     VkImage& image, VkDeviceMemory& imageMemory) 
+                     VkImage& image, VkDeviceMemory& imageMemory,
+                     VkImageCreateFlags flags = 0) 
     {
         VkImageCreateInfo imageInfo{};
         imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -177,15 +214,15 @@ namespace VulkanHelper {
         imageInfo.extent.height = height;
         imageInfo.extent.depth = 1;
         imageInfo.mipLevels = mipLevels;
-        imageInfo.arrayLayers = 1;
+        imageInfo.arrayLayers = arrayLayers;
         imageInfo.format = format;
         imageInfo.tiling = tiling;
         imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED; // Initial layout
         imageInfo.usage = usage; // Usage flags
         imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE; // Sharing mode
         imageInfo.samples = numSamples; // Number of samples for multisampling
-        imageInfo.flags = 0; // No flags
-    
+        imageInfo.flags = flags;
+
         if (vkCreateImage(ctx->device, &imageInfo, nullptr, &image) != VK_SUCCESS) {
             spdlog::error("Failed to create image!");
             return;
@@ -210,19 +247,21 @@ namespace VulkanHelper {
     VkImageView createImageView(const std::shared_ptr<VulkanContext>& ctx, 
                                 VkImage image, 
                                 VkFormat format, 
-                                uint32_t mipLevels, 
-                                VkImageAspectFlags aspectFlags)
+                                uint32_t mipLevels,
+                                uint32_t arrayLayers,
+                                VkImageAspectFlags aspectFlags,
+                                VkImageViewType viewType)
     {
         VkImageViewCreateInfo viewInfo{};
         viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
         viewInfo.image = image;
-        viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+        viewInfo.viewType = viewType;
         viewInfo.format = format;
         viewInfo.subresourceRange.aspectMask = aspectFlags;
         viewInfo.subresourceRange.baseMipLevel = 0;
         viewInfo.subresourceRange.levelCount = mipLevels;
         viewInfo.subresourceRange.baseArrayLayer = 0;
-        viewInfo.subresourceRange.layerCount = 1;
+        viewInfo.subresourceRange.layerCount = arrayLayers;
 
         VkImageView imageView;
         if (vkCreateImageView(ctx->device, &viewInfo, nullptr, &imageView) != VK_SUCCESS) {
@@ -236,7 +275,8 @@ namespace VulkanHelper {
     void transitionImageLayout(const std::shared_ptr<VulkanContext>& ctx, 
                                VkImage image, 
                                VkFormat format, 
-                               uint32_t mipLevels, 
+                               uint32_t mipLevels,
+                               uint32_t arrayLayers,
                                VkImageLayout oldLayout, 
                                VkImageLayout newLayout)
     {
@@ -253,8 +293,8 @@ namespace VulkanHelper {
         barrier.subresourceRange.baseMipLevel = 0;
         barrier.subresourceRange.levelCount = mipLevels;
         barrier.subresourceRange.baseArrayLayer = 0;
-        barrier.subresourceRange.layerCount = 1;
-    
+        barrier.subresourceRange.layerCount = arrayLayers;
+
         VkPipelineStageFlags sourceStage;
         VkPipelineStageFlags destinationStage;
     

@@ -255,4 +255,62 @@ namespace MeshFactory {
 
         return mesh;
     }
+
+    
+    HostMesh createCubeMesh(float width, float height, float depth)
+    {
+        HostMesh mesh;
+
+        // Define the 8 vertices of the cube
+        std::array<glm::vec3, 8> vertices = {
+            glm::vec3(-width / 2, -height / 2, -depth / 2),
+            glm::vec3(width / 2, -height / 2, -depth / 2),
+            glm::vec3(width / 2, height / 2, -depth / 2),
+            glm::vec3(-width / 2, height / 2, -depth / 2),
+            glm::vec3(-width / 2, -height / 2, depth / 2),
+            glm::vec3(width / 2, -height / 2, depth / 2),
+            glm::vec3(width / 2, height / 2, depth / 2),
+            glm::vec3(-width / 2, height / 2, depth / 2)
+        };
+
+        // Define the indices for the cube's faces
+        std::array<uint32_t, 36> indices = {
+            // Front face
+            0, 1, 2,
+            0, 2, 3,
+            // Back face
+            4, 5, 6,
+            4, 6, 7,
+            // Left face
+            0, 4, 7,
+            0, 7, 3,
+            // Right face
+            1, 5, 6,
+            1, 6, 2,
+            // Top face
+            3, 2, 6,
+            3, 6, 7,
+            // Bottom face
+            0, 1, 5,
+            0, 5, 4
+        };
+
+        for (const auto& vertex : vertices) {
+            Vertex v;
+            v.pos = vertex;
+            v.color = {1.0f,1.0f,1.0f,1.0f}; // Default color (white)
+            v.texCoord = {0.0f, 0.0f};       // Default texture coordinates
+            v.normal = {0.0f, 0.0f, 0.0f};   // Default normal (to be calculated later)
+            v.tangent = {0.0f, 0.0f, 0.0f};  // Default tangent (to be calculated later)
+            mesh.vertices.push_back(v);
+        }
+
+        for (const auto& index : indices) {
+            mesh.indices.push_back(index);
+            +
+        }
+
+        return mesh;
+    }
+
 }

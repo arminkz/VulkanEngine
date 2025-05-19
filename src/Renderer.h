@@ -61,12 +61,12 @@ private:
     std::unordered_map<int, std::shared_ptr<DeviceModel>> _selectableObjects; // Selectable objects
 
     // Models that need special treatment
+    std::shared_ptr<DeviceModel> _skyBoxModel = nullptr;
     std::shared_ptr<DeviceModel> _sunModel = nullptr;
     std::shared_ptr<AtmosphereModel> _sunGlowModel = nullptr;
 
-
     // Called when the window is resized
-    void invalidate(); 
+    void invalidate();
 
 
     // Main render resources
