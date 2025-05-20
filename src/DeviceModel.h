@@ -1,8 +1,7 @@
 #pragma once
 #include "stdafx.h"
 #include "geometry/DeviceMesh.h"
-#include "DeviceTexture.h"
-#include "TextureSampler.h"
+#include "Texture2D.h"
 #include "VulkanContext.h"
 #include "UniformBuffer.h"
 #include "DescriptorSet.h"

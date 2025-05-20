@@ -77,7 +77,7 @@ Renderer::~Renderer()
 bool Renderer::initialize()
 {
     // Create swap chain
-    _swapChain = std::make_unique<SwapChain>(_ctx);
+    _swapChain = std::make_shared<SwapChain>(_ctx);
 
     // MSAA
     _msaaSamples = VulkanHelper::getMaxMsaaSampleCount(_ctx);

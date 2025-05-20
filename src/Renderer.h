@@ -7,9 +7,7 @@
 #include "Pipeline.h"
 #include "DeviceModel.h"
 #include "AtmosphereModel.h"
-#include "TextureSampler.h"
 #include "DescriptorSet.h"
-#include "GUI.h"
 #include "SwapChain.h"
 #include "FrameBuffer.h"
 
@@ -19,7 +17,7 @@ private:
     std::shared_ptr<VulkanContext> _ctx;
 
     // Swapchain
-    std::unique_ptr<SwapChain> _swapChain;
+    std::shared_ptr<SwapChain> _swapChain;
 
     // GUI (ImGui)
     std::unique_ptr<GUI> _gui = nullptr;

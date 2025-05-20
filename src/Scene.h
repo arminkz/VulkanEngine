@@ -4,25 +4,28 @@
 #include "Camera.h"
 #include "UniformBuffer.h"
 #include "DescriptorSet.h"
+#include "SwapChain.h"
+
 
 class Scene
 {
 public:
-    Scene(std::shared_ptr<VulkanContext> ctx);
+    Scene(std::shared_ptr<VulkanContext> ctx, std::shared_ptr<SwapChain> swapchain);
     ~Scene();
 
     // Child classes should implement this method to create their own scene
     virtual void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex) = 0;
-    void update();
+    virtual void update();
 
     // Invalidate (Renderer informs the scene that the swapchain has been recreated)
-    virtual void invalidate() = 0;
+    void setSwapChain(std::shared_ptr<SwapChain> swapchain) { _swapChain = std::move(swapchain); }
 
     // Get Scene Descriptor Set
     const DescriptorSet* getSceneDescriptorSet() const { return _sceneDescriptorSets[_currentFrame].get(); }
 
 private:
     std::shared_ptr<VulkanContext> _ctx;
+    std::shared_ptr<SwapChain> _swapChain;
 
     // Camera
     std::unique_ptr<Camera> _camera = nullptr;
