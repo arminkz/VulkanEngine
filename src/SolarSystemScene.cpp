@@ -73,7 +73,32 @@ void SolarSystemScene::createPipelines()
     sunPipelineParams.renderPass = _offscreenRenderPassMSAA;
     sunPipelineParams.msaaSamples = _renderer.getMSAASamples();
     _sunPipeline = std::make_unique<Pipeline>(_ctx, "spv/sun/sun_vert.spv", "spv/sun/sun_frag.spv", sunPipelineParams);
+}
 
+
+void SolarSystemScene::connectPipelines()
+{
+    // Set the pipelines for all planets
+    for (const auto& planet : _planets) {
+        planet->setPipeline(_planetPipeline);
+    }
+
+    // Set the pipeline for orbits
+    for (const auto& orbit : _orbits) {
+        orbit->setPipeline(_orbitPipeline);
+    }
+
+    // Set the pipeline for glow spheres
+    for (const auto& glowSphere : _glowSpheres) {
+        glowSphere->setPipeline(_glowSpherePipeline);
+    }
+
+    // Earth and sun have their own pipelines
+    _sun->setPipeline(_sunPipeline);
+    _earth->setPipeline(_earthPipeline);
+
+    // Set the pipeline for the skybox
+    _skyBox->setPipeline(_skyBoxPipeline);
 }
 
 
@@ -96,7 +121,6 @@ void SolarSystemScene::createModels()
 
     // Sun
     _sun = std::make_shared<Sun>(_ctx, "Sun", sphereDMesh, sizeSun);
-    _planets.push_back(_sun);
 
     // Mercury
     std::shared_ptr<Texture2D> mercuryColorTexture = std::make_shared<Texture2D>(_ctx, "textures/mercury/8k_mercury.jpg", VK_FORMAT_R8G8B8A8_SRGB);
@@ -180,4 +204,9 @@ void SolarSystemScene::createModels()
 
     // Pluto Orbit
     _orbits.push_back(std::make_unique<Orbit>(_ctx, "PlutoOrbit", quadDMesh, _sun, orbitRadPluto));
+}
+
+
+void SolarSystemScene::createRenderPasses() {
+    
 }
