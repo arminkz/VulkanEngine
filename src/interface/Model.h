@@ -13,16 +13,16 @@ public:
     ~Model();
 
     const std::string& getName() const { return _name; }
+    glm::mat4 getModelMatrix() const { return _modelMatrix; }
 
     virtual void draw(VkCommandBuffer commandBuffer, const Scene& scene) = 0;
-
-    void setPipeline(std::shared_ptr<Pipeline> pipeline) { _pipeline = std::move(pipeline); }
+    void setPipeline(std::weak_ptr<Pipeline> pipeline) { _pipeline = std::move(pipeline); }
 
 protected:
     std::shared_ptr<VulkanContext> _ctx;
     std::string _name;
     std::shared_ptr<DeviceMesh> _mesh;
-    std::shared_ptr<Pipeline> _pipeline = nullptr;
+    std::weak_ptr<Pipeline> _pipeline;
 
     glm::mat4 _modelMatrix;
 };

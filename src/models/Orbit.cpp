@@ -3,8 +3,12 @@
 
 Orbit::Orbit(std::shared_ptr<VulkanContext> ctx, 
              std::string name, 
-             std::shared_ptr<DeviceMesh> mesh)
-    : Model(ctx, std::move(name), std::move(mesh))
+             std::shared_ptr<DeviceMesh> mesh,
+             std::weak_ptr<Model> parent,
+             float orbitSize)
+    : Model(ctx, std::move(name), std::move(mesh)), 
+      _parent(std::move(parent)),
+      _orbitSize(orbitSize)
 {
 }
 
@@ -12,6 +16,18 @@ Orbit::Orbit(std::shared_ptr<VulkanContext> ctx,
 Orbit::~Orbit()
 {
     // Cleanup resources if needed
+}
+
+
+void Orbit::calculateModelMatrix()
+{
+    glm::vec3 parentPosition = glm::vec3(0.0f);
+    if (auto parent = _parent.lock()) {
+        parentPosition = parent->getModelMatrix() * glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+    }
+
+    // Update the model matrix
+    _modelMatrix = glm::translate(glm::mat4(1.0f), parentPosition) * glm::scale(glm::mat4(1.0f), glm::vec3(_orbitSize));
 }
 
 

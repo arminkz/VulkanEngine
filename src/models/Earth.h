@@ -7,7 +7,7 @@
 #include "Pipeline.h"
 
 
-class Earth : public Model, public ISelectable
+class Earth : public Planet
 {
 public:
     Earth(std::shared_ptr<VulkanContext> ctx, 
@@ -17,8 +17,10 @@ public:
           std::shared_ptr<Texture2D> unlitColorTexture,
           std::shared_ptr<Texture2D> normalMapTexture,
           std::shared_ptr<Texture2D> specularTexture,
-          std::shared_ptr<Texture2D> overlayColorTexture
-        );
+          std::shared_ptr<Texture2D> overlayColorTexture,
+          std::weak_ptr<Model> parent,
+          float planetSize,
+          float orbitRadius);
 
     ~Earth();
 
@@ -28,7 +30,6 @@ public:
     const DescriptorSet* getDescriptorSet() const { return _descriptorSet.get(); }
 
 private:
-    std::shared_ptr<Texture2D> _baseColorTexture;
     std::shared_ptr<Texture2D> _unlitColorTexture;
     std::shared_ptr<Texture2D> _normalMapTexture;
     std::shared_ptr<Texture2D> _specularTexture;

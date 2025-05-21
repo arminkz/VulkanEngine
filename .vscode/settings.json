@@ -88,6 +88,13 @@
         "source_location": "cpp",
         "unordered_set": "cpp",
         "variant": "cpp",
-        "xstddef": "cpp"
+        "xstddef": "cpp",
+        "cwctype": "cpp",
+        "memory_resource": "cpp",
+        "string_view": "cpp",
+        "numbers": "cpp",
+        "semaphore": "cpp",
+        "cfenv": "cpp",
+        "cinttypes": "cpp"
     }
 }

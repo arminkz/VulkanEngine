@@ -4,10 +4,16 @@
 Planet::Planet(std::shared_ptr<VulkanContext> ctx, 
                std::string name, 
                std::shared_ptr<DeviceMesh> mesh, 
-               std::shared_ptr<Texture2D> baseColorTexture)
+               std::shared_ptr<Texture2D> baseColorTexture,
+               std::weak_ptr<Model> parent,
+               float planetSize,
+               float orbitRadius)
 
     : Model(ctx, std::move(name), std::move(mesh)),
-    _baseColorTexture(std::move(baseColorTexture))
+    _baseColorTexture(std::move(baseColorTexture)),
+    _parent(std::move(parent)),
+    _size(planetSize),
+    _orbitRadius(orbitRadius)
 {
     std::vector<Descriptor> descriptors = {
         Descriptor(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 1, _baseColorTexture->getDescriptorInfo()), // Base color texture
@@ -19,6 +25,22 @@ Planet::Planet(std::shared_ptr<VulkanContext> ctx,
 Planet::~Planet()
 {
     // Cleanup resources if needed
+}
+
+
+void Planet::calculateModelMatrix()
+{
+    // Calculate position based on parent's position and orbit radius
+    glm::vec3 parentPosition = glm::vec3(0.0f);
+    if (auto parent = _parent.lock()) {
+        parentPosition = parent->getModelMatrix() * glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+    }
+
+    // Calculate the new position based on the orbit radius and angle
+    glm::vec3 newPosition = parentPosition + glm::vec3(_orbitRadius * cos(_orbitAngle), 0.0f, _orbitRadius * sin(_orbitAngle));
+
+    // Update the model matrix
+    _modelMatrix = glm::translate(glm::mat4(1.0f), newPosition) * glm::scale(glm::mat4(1.0f), glm::vec3(_size));
 }
 
 

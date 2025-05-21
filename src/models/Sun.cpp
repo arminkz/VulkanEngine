@@ -3,8 +3,10 @@
 
 Sun::Sun(std::shared_ptr<VulkanContext> ctx, 
          std::string name, 
-         std::shared_ptr<DeviceMesh> mesh)
-    : Model(ctx, std::move(name), std::move(mesh))
+         std::shared_ptr<DeviceMesh> mesh,
+         float planetSize)
+    : Model(ctx, std::move(name), std::move(mesh)), 
+      _size(planetSize)
 {
 }
 
@@ -15,9 +17,11 @@ Sun::~Sun()
 }
 
 
-Sun::~Sun()
+void Sun::calculateModelMatrix()
 {
-    // Cleanup resources if needed
+    // Set the model matrix to identity for the sun
+    _modelMatrix = glm::mat4(1.0f);
+    _modelMatrix = glm::scale(_modelMatrix, glm::vec3(_size));
 }
 
 

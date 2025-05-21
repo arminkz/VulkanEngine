@@ -28,21 +28,22 @@ private:
     VkRenderPass _objectSelectionRenderPass;
     void createRenderPasses();
 
-    std::unique_ptr<Pipeline> _planetPipeline;
-    std::unique_ptr<Pipeline> _orbitPipeline;
-    std::unique_ptr<Pipeline> _glowSpherePipeline;
-    std::unique_ptr<Pipeline> _skyBoxPipeline;
-    std::unique_ptr<Pipeline> _sunPipeline;
-    std::unique_ptr<Pipeline> _earthPipeline;
+    std::shared_ptr<Pipeline> _planetPipeline;
+    std::shared_ptr<Pipeline> _orbitPipeline;
+    std::shared_ptr<Pipeline> _glowSpherePipeline;
+    std::shared_ptr<Pipeline> _skyBoxPipeline;
+    std::shared_ptr<Pipeline> _sunPipeline;
+    std::shared_ptr<Pipeline> _earthPipeline;
     std::unique_ptr<Pipeline> _objectSelectionPipeline;
     void createPipelines();
+    void connectPipelines();
 
-    std::vector<std::unique_ptr<Planet>> _planets;
+    std::vector<std::shared_ptr<Planet>> _planets;
     std::vector<std::unique_ptr<Orbit>> _orbits;
     std::vector<std::unique_ptr<GlowSphere>> _glowSpheres;
     std::unique_ptr<SkyBox> _skyBox;
-    std::unique_ptr<Sun> _sun;
-    std::unique_ptr<Earth> _earth;
+    std::shared_ptr<Sun> _sun;
+    std::shared_ptr<Earth> _earth;
     void createModels();
 
 

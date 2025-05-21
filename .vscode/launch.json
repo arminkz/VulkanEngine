@@ -12,6 +12,17 @@
         "environment": [],
         "console": "internalConsole",
         "preLaunchTask": "build"
+      },
+      {
+        "name": "Debug C++ (GDB)",
+        "type": "cppdbg",
+        "request": "launch",
+        "program": "${workspaceFolder}/build/Debug/VulkanEngine",
+        "args": [],
+        "stopAtEntry": false,
+        "cwd": "${workspaceFolder}",
+        "environment": [],
+        "preLaunchTask": "build"
       }
     ]
   }
