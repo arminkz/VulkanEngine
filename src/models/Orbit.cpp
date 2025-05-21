@@ -3,10 +3,8 @@
 
 Orbit::Orbit(std::shared_ptr<VulkanContext> ctx, 
              std::string name, 
-             std::shared_ptr<DeviceMesh> mesh, 
-             std::shared_ptr<Pipeline> pipeline)
-    : Model(ctx, std::move(name), std::move(mesh)), 
-      _pipeline(std::move(pipeline))
+             std::shared_ptr<DeviceMesh> mesh)
+    : Model(ctx, std::move(name), std::move(mesh))
 {
 }
 

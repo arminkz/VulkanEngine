@@ -13,16 +13,11 @@ class Sun : public Model, public ISelectable
 public:
     Sun(std::shared_ptr<VulkanContext> ctx, 
         std::string name, 
-        std::shared_ptr<DeviceMesh> mesh, 
-        std::shared_ptr<Pipeline> pipeline,
-        std::shared_ptr<Pipeline> selectionPipeline);
+        std::shared_ptr<DeviceMesh> mesh);
 
     ~Sun();
 
     void draw(VkCommandBuffer commandBuffer, const Scene& scene) override;
     void drawSelection(VkCommandBuffer commandBuffer, const Scene& scene) override;
 
-private:
-    std::shared_ptr<Pipeline> _pipeline;
-    std::shared_ptr<Pipeline> _selectionPipeline;
 };

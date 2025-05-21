@@ -3,6 +3,7 @@
 #include "VulkanContext.h"
 #include "geometry/DeviceMesh.h"
 #include "Scene.h"
+#include "Pipeline.h"
 
 
 class Model
@@ -15,10 +16,14 @@ public:
 
     virtual void draw(VkCommandBuffer commandBuffer, const Scene& scene) = 0;
 
+    void setPipeline(std::shared_ptr<Pipeline> pipeline) { _pipeline = std::move(pipeline); }
+
 protected:
     std::shared_ptr<VulkanContext> _ctx;
     std::string _name;
     std::shared_ptr<DeviceMesh> _mesh;
+    std::shared_ptr<Pipeline> _pipeline = nullptr;
+
     glm::mat4 _modelMatrix;
 };
 

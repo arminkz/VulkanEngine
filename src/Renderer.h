@@ -13,6 +13,22 @@
 
 class Renderer {
 
+public:
+    Renderer(std::shared_ptr<VulkanContext> ctx);
+    ~Renderer();
+
+    bool initialize();
+    void drawFrame();
+    void handleMouseClick(float mouseX, float mouseY);
+    void informFramebufferResized() { _framebufferResized = true; };
+
+    SwapChain* getSwapChain() { return _swapChain.get(); };
+    VkSampleCountFlagBits getMSAASamples() { return _msaaSamples; };
+
+    Camera* getCamera() { return _camera.get(); };
+    GUI* getGUI() { return _gui.get(); };
+    
+
 private:
     std::shared_ptr<VulkanContext> _ctx;
 
@@ -146,15 +162,5 @@ private:
 
     uint32_t querySelectionImage(float mouseX, float mouseY);
 
-public:
-    Renderer(std::shared_ptr<VulkanContext> ctx);
-    ~Renderer();
 
-    bool initialize();
-    void drawFrame();
-    void handleMouseClick(float mouseX, float mouseY);
-    void informFramebufferResized() { _framebufferResized = true; };
-
-    Camera* getCamera() { return _camera.get(); };
-    GUI* getGUI() { return _gui.get(); };
 };

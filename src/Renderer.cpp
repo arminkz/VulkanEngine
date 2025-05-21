@@ -992,7 +992,7 @@ void Renderer::recordBloomCommandBuffer(VkCommandBuffer commandBuffer, uint32_t 
 
     _glowPipeline->bind(commandBuffer);
     for(int m=0; m<static_cast<int>(_allModels.size()); m++) {
-        VkBuffer vertexBuffers[] = {_allModels[m]->getDeviceMesh()->getVertexBuffer()};
+        VkBuffer vertexBuffers[] = {_allModels[m]->getD;eviceMesh()->getVertexBuffer()};
         VkDeviceSize offsets[] = {0};
         vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets); // We can have multiple vertex buffers
         vkCmdBindIndexBuffer(commandBuffer, _allModels[m]->getDeviceMesh()->getIndexBuffer(), 0, VK_INDEX_TYPE_UINT32); // We can only use one index buffer at a time

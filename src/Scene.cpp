@@ -1,7 +1,7 @@
 #include "Scene.h"
 
-Scene::Scene(std::shared_ptr<VulkanContext> ctx, std::shared_ptr<SwapChain> swapchain)
-    : _ctx(std::move(ctx)), _swapChain(std::move(swapchain))
+Scene::Scene(std::shared_ptr<VulkanContext> ctx, Renderer& renderer)
+    : _ctx(std::move(ctx)), _renderer(renderer)
 {
     // Initialize scene information
     _sceneInfo.view = glm::mat4(1.0f);
@@ -37,9 +37,13 @@ void Scene::update()
 
     // Update SceneInfo
     _sceneInfo.view = _camera->getViewMatrix();
-    _sceneInfo.projection = glm::perspective(glm::radians(45.f), (float)_swapChain->getSwapChainExtent().width / (float)_swapChain->getSwapChainExtent().height, 0.1f, 1000.f);
+
+    VkExtent2D swapChainExtent = _renderer.getSwapChain()->getSwapChainExtent();
+    _sceneInfo.projection = glm::perspective(glm::radians(45.f), (float)swapChainExtent.width / (float)swapChainExtent.height, 0.1f, 1000.f);
     _sceneInfo.projection[1][1] *= -1; // Invert Y axis for Vulkan
+
     _sceneInfo.time = time;
+    
     _sceneInfo.cameraPosition = _camera->getPosition();
 
     // Update the scene information UBO

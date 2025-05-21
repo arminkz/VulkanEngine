@@ -4,14 +4,10 @@
 Planet::Planet(std::shared_ptr<VulkanContext> ctx, 
                std::string name, 
                std::shared_ptr<DeviceMesh> mesh, 
-               std::shared_ptr<Texture2D> baseColorTexture,
-               std::shared_ptr<Pipeline> pipeline,
-               std::shared_ptr<Pipeline> selectionPipeline)
+               std::shared_ptr<Texture2D> baseColorTexture)
 
     : Model(ctx, std::move(name), std::move(mesh)),
-    _baseColorTexture(std::move(baseColorTexture)), 
-    _pipeline(std::move(pipeline)), 
-    _selectionPipeline(std::move(selectionPipeline))
+    _baseColorTexture(std::move(baseColorTexture))
 {
     std::vector<Descriptor> descriptors = {
         Descriptor(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 1, _baseColorTexture->getDescriptorInfo()), // Base color texture

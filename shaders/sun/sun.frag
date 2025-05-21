@@ -13,36 +13,20 @@ layout(set = 0, binding = 0) uniform SceneInfo {
 // Per-model variabales that change a lot 
 layout(push_constant) uniform PushConstants {
     mat4 model;
-    uint objectId;
 } pc;
 
-// Per-model variables that don't change a lot
-layout(set = 1, binding = 0) uniform materialUBO {  // Material information (set 1 is per-model descriptor set) 
-    int hasBaseColorTexture;
-    int hasUnlitColorTexture;
-    int hasNormalMapTexture;
-    int hasSpecularTexture;
-    int hasOverlayColorTexture;
-
-    float ambientStrength;
-    float specularStrength;
-    float overlayOffset;
-
-    int sunShadeMode;
-} material;
-
-layout(set = 1, binding = 1) uniform sampler2D baseColorTexture;
-layout(set = 1, binding = 2) uniform sampler2D unlitColorTexture;
-layout(set = 1, binding = 3) uniform sampler2D normalMapTexture;
-layout(set = 1, binding = 4) uniform sampler2D specularTexture;
-layout(set = 1, binding = 5) uniform sampler2D overlayColorTexture;
+layout(set = 1, binding = 0) uniform sampler2D baseColorTexture;
+layout(set = 1, binding = 1) uniform sampler2D unlitColorTexture;
+layout(set = 1, binding = 2) uniform sampler2D normalMapTexture;
+layout(set = 1, binding = 3) uniform sampler2D specularTexture;
+layout(set = 1, binding = 4) uniform sampler2D overlayColorTexture;
 
 layout(location = 0) in vec4 fragColor;
 layout(location = 1) in vec2 fragTexCoord;
 layout(location = 2) in vec4 worldPosition;
 layout(location = 3) in vec3 worldNormal;
 layout(location = 4) in vec3 worldTangent;
-layout(location = 5) in vec3 positionView;
+layout(location = 5) in vec3 worldViewPosition;
 layout(location = 6) in vec3 normalView;
 
 layout(location = 0) out vec4 outColor;
@@ -61,7 +45,7 @@ float noise (in vec3 _pos) {
     float i_time = floor(si.time*0.2);
     float f_time = fract(si.time*0.2);
 
-    // Four corners in 2D of a tile
+    // 8 corners of a cube
     float aa = random(i_pos + i_time);
     float ab = random(i_pos + i_time + vec3(1., 0., 0.));
     float ac = random(i_pos + i_time + vec3(0., 1., 0.));
@@ -84,7 +68,7 @@ float noise (in vec3 _pos) {
     vec3 t = smoothstep(0., 1., f_pos);
     float t_time = smoothstep(0., 1., f_time);
 
-    // Mix 4 corners percentages
+    // Mix 8 corners
     return 
     mix(
         mix(

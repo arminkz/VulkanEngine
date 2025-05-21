@@ -17,14 +17,15 @@ public:
           std::shared_ptr<Texture2D> unlitColorTexture,
           std::shared_ptr<Texture2D> normalMapTexture,
           std::shared_ptr<Texture2D> specularTexture,
-          std::shared_ptr<Texture2D> overlayColorTexture,
-          std::shared_ptr<Pipeline> pipeline,
-          std::shared_ptr<Pipeline> selectionPipeline);
+          std::shared_ptr<Texture2D> overlayColorTexture
+        );
 
     ~Earth();
 
     void draw(VkCommandBuffer commandBuffer, const Scene& scene) override;
     void drawSelection(VkCommandBuffer commandBuffer, const Scene& scene) override;
+
+    const DescriptorSet* getDescriptorSet() const { return _descriptorSet.get(); }
 
 private:
     std::shared_ptr<Texture2D> _baseColorTexture;
@@ -33,7 +34,5 @@ private:
     std::shared_ptr<Texture2D> _specularTexture;
     std::shared_ptr<Texture2D> _overlayColorTexture;
 
-    std::shared_ptr<Pipeline> _pipeline;
-    std::shared_ptr<Pipeline> _selectionPipeline;
     std::unique_ptr<DescriptorSet> _descriptorSet;
 };

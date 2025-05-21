@@ -12,14 +12,10 @@ class Orbit : public Model
 public:
     Orbit(std::shared_ptr<VulkanContext> ctx, 
           std::string name, 
-          std::shared_ptr<DeviceMesh> mesh, 
-          std::shared_ptr<Pipeline> pipeline);
+          std::shared_ptr<DeviceMesh> mesh);
 
     ~Orbit();
 
     void draw(VkCommandBuffer commandBuffer, const Scene& scene) override;
 
-private:
-    std::shared_ptr<Pipeline> _pipeline;
-    std::shared_ptr<Pipeline> _selectionPipeline;
 };

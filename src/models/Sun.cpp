@@ -3,13 +3,15 @@
 
 Sun::Sun(std::shared_ptr<VulkanContext> ctx, 
          std::string name, 
-         std::shared_ptr<DeviceMesh> mesh, 
-         std::shared_ptr<Pipeline> pipeline,
-         std::shared_ptr<Pipeline> selectionPipeline)
-    : Model(ctx, std::move(name), std::move(mesh)), 
-      _pipeline(std::move(pipeline)), 
-      _selectionPipeline(std::move(selectionPipeline))
+         std::shared_ptr<DeviceMesh> mesh)
+    : Model(ctx, std::move(name), std::move(mesh))
 {
+}
+
+
+Sun::~Sun()
+{
+    // Cleanup resources if needed
 }
 
 

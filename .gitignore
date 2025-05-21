@@ -1,4 +1,5 @@
 /build/
+/spv/
 
 compile_shaders.ps1
 compile_run.ps1

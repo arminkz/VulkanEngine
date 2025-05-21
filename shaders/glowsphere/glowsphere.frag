@@ -13,7 +13,6 @@ layout(set = 0, binding = 0) uniform SceneInfo {
 // Per-model variabales that change a lot 
 layout(push_constant) uniform PushConstants {
     mat4 model;
-    uint objectId;
 } pc;
 
 // Per-model variables that don't change a lot (set 1 is per-model descriptor set)

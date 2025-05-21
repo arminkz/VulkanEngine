@@ -7,17 +7,13 @@ Earth::Earth(std::shared_ptr<VulkanContext> ctx,
              std::shared_ptr<Texture2D> unlitColorTexture,
              std::shared_ptr<Texture2D> normalMapTexture,
              std::shared_ptr<Texture2D> specularTexture,
-             std::shared_ptr<Texture2D> overlayColorTexture,
-             std::shared_ptr<Pipeline> pipeline,
-             std::shared_ptr<Pipeline> selectionPipeline)
+             std::shared_ptr<Texture2D> overlayColorTexture)
     : Model(ctx, std::move(name), std::move(mesh)), 
       _baseColorTexture(std::move(baseColorTexture)), 
       _unlitColorTexture(std::move(unlitColorTexture)),
       _normalMapTexture(std::move(normalMapTexture)),
       _specularTexture(std::move(specularTexture)),
-      _overlayColorTexture(std::move(overlayColorTexture)),
-      _pipeline(std::move(pipeline)), 
-      _selectionPipeline(std::move(selectionPipeline))
+      _overlayColorTexture(std::move(overlayColorTexture))
 {
     std::vector<Descriptor> descriptors = {
         Descriptor(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 1, _baseColorTexture->getDescriptorInfo()), // Base color texture
