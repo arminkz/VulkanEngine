@@ -3,6 +3,7 @@
 #include "VulkanContext.h"
 #include "Scene.h"
 #include "Renderer.h"
+#include "RenderPass.h"
 #include "models/Planet.h"
 #include "models/Sun.h"
 #include "models/Earth.h"
@@ -21,11 +22,10 @@ public:
     void update() override;
 
 private:
-
-    VkRenderPass _renderPass;
-    VkRenderPass _offscreenRenderPass;
-    VkRenderPass _offscreenRenderPassMSAA;
-    VkRenderPass _objectSelectionRenderPass;
+    std::unique_ptr<RenderPass> _renderPass;
+    std::unique_ptr<RenderPass> _offscreenRenderPass;
+    std::unique_ptr<RenderPass> _offscreenRenderPassMSAA;
+    std::unique_ptr<RenderPass> _objectSelectionRenderPass;
     void createRenderPasses();
 
     std::shared_ptr<Pipeline> _planetPipeline;
@@ -70,5 +70,4 @@ private:
     const float orbitRadUranus = 119.f;
     const float orbitRadNeptune = 139.f;
     const float orbitRadPluto = 155.f;
-
 };

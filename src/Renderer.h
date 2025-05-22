@@ -35,20 +35,15 @@ private:
     // Swapchain
     std::shared_ptr<SwapChain> _swapChain;
 
-    // GUI (ImGui)
-    std::unique_ptr<GUI> _gui = nullptr;
-
     // Calculated constants
     VkSampleCountFlagBits _msaaSamples = VK_SAMPLE_COUNT_1_BIT;
 
+    // GUI (ImGui)
+    std::unique_ptr<GUI> _gui = nullptr;
 
 
     std::unique_ptr<Camera> _camera = nullptr;
     uint32_t _currentTargetObjectID;
-
-    
-
-    std::shared_ptr<TextureSampler> _textureSampler;
 
     // Global information that we need to pass to the shader
     struct SceneInfo {

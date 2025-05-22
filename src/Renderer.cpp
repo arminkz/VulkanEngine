@@ -133,8 +133,8 @@ bool Renderer::initialize()
     _skyBoxModel = skySphere;
 
     //Sun
-    std::shared_ptr<DeviceTexture> sunTexture = std::make_shared<DeviceTexture>(_ctx, "textures/8k_sun.jpg", VK_FORMAT_R8G8B8A8_SRGB);
-    std::shared_ptr<DeviceTexture> sunPerlinTexture = std::make_shared<DeviceTexture>(_ctx, "textures/perlin.png", VK_FORMAT_R8G8B8A8_UNORM);
+    //std::shared_ptr<DeviceTexture> sunTexture = std::make_shared<DeviceTexture>(_ctx, "textures/8k_sun.jpg", VK_FORMAT_R8G8B8A8_SRGB);
+    //std::shared_ptr<DeviceTexture> sunPerlinTexture = std::make_shared<DeviceTexture>(_ctx, "textures/perlin.png", VK_FORMAT_R8G8B8A8_UNORM);
     glm::mat4 sunModelMat = glm::mat4(1.f);
     sunModelMat = glm::scale(sunModelMat, glm::vec3(sizeSun));
     std::shared_ptr<DeviceModel> sun = std::make_shared<DeviceModel>("Sun", _ctx, sphereDMesh, sunModelMat, sunTexture, nullptr, nullptr, nullptr, sunPerlinTexture, _textureSampler);

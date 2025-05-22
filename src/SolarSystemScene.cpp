@@ -8,6 +8,25 @@ SolarSystemScene::SolarSystemScene(std::shared_ptr<VulkanContext> ctx, Renderer&
 }
 
 
+SolarSystemScene::~SolarSystemScene()
+{
+    // Wait for any unfinished GPU tasks
+    vkDeviceWaitIdle(_ctx->device);
+
+    _planetPipeline = nullptr;
+    _orbitPipeline = nullptr;
+    _glowSpherePipeline = nullptr;
+    _skyBoxPipeline = nullptr;
+    _sunPipeline = nullptr;
+    _earthPipeline = nullptr;
+
+    _renderPass = nullptr;
+    _offscreenRenderPass = nullptr;
+    _offscreenRenderPassMSAA = nullptr;
+    _objectSelectionRenderPass = nullptr;
+}
+
+
 void SolarSystemScene::createPipelines()
 {
     VkDescriptorSetLayout sceneDSL = _sceneDescriptorSets[0]->getDescriptorSetLayout();
@@ -17,7 +36,7 @@ void SolarSystemScene::createPipelines()
     planetPipelineParams.name = "PlanetPipeline";
     planetPipelineParams.descriptorSetLayouts = {sceneDSL, _planets[0]->getDescriptorSet()->getDescriptorSetLayout()};
     planetPipelineParams.pushConstantRanges = {{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(glm::mat4)}};
-    planetPipelineParams.renderPass = _offscreenRenderPassMSAA;
+    planetPipelineParams.renderPass = _offscreenRenderPassMSAA->getRenderPass();
     planetPipelineParams.msaaSamples = _renderer.getMSAASamples();
     _planetPipeline = std::make_unique<Pipeline>(_ctx, "spv/planet/planet_vert.spv", "spv/planet/planet_frag.spv", planetPipelineParams);
 
@@ -26,7 +45,7 @@ void SolarSystemScene::createPipelines()
     orbitPipelineParams.name = "OrbitPipeline";
     orbitPipelineParams.descriptorSetLayouts = {sceneDSL};
     orbitPipelineParams.pushConstantRanges = {{VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(glm::mat4)}};
-    orbitPipelineParams.renderPass = _offscreenRenderPassMSAA;
+    orbitPipelineParams.renderPass = _offscreenRenderPassMSAA->getRenderPass();
     orbitPipelineParams.msaaSamples = _renderer.getMSAASamples();
     orbitPipelineParams.depthTest = true;
     orbitPipelineParams.depthWrite = false;
@@ -37,7 +56,7 @@ void SolarSystemScene::createPipelines()
     glowSpherePipelineParams.name = "GlowSpherePipeline";
     glowSpherePipelineParams.descriptorSetLayouts = {sceneDSL, _glowSpheres[0]->getDescriptorSet()->getDescriptorSetLayout()};
     glowSpherePipelineParams.pushConstantRanges = {{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(glm::mat4)}};
-    glowSpherePipelineParams.renderPass = _offscreenRenderPassMSAA;
+    glowSpherePipelineParams.renderPass = _offscreenRenderPassMSAA->getRenderPass();
     glowSpherePipelineParams.msaaSamples = _renderer.getMSAASamples();
     glowSpherePipelineParams.depthTest = true;
     glowSpherePipelineParams.depthWrite = false;
@@ -49,7 +68,7 @@ void SolarSystemScene::createPipelines()
     skyBoxPipelineParams.name = "SkyBoxPipeline";
     skyBoxPipelineParams.descriptorSetLayouts = {sceneDSL, _skyBox->getDescriptorSet()->getDescriptorSetLayout()};
     skyBoxPipelineParams.pushConstantRanges = {{VK_SHADER_STAGE_VERTEX_BIT , 0, sizeof(glm::mat4)}};
-    skyBoxPipelineParams.renderPass = _offscreenRenderPassMSAA;
+    skyBoxPipelineParams.renderPass = _offscreenRenderPassMSAA->getRenderPass();
     skyBoxPipelineParams.msaaSamples = _renderer.getMSAASamples();
     skyBoxPipelineParams.depthTest = true;
     skyBoxPipelineParams.depthWrite = false;
@@ -61,7 +80,7 @@ void SolarSystemScene::createPipelines()
     earthPipelineParams.name = "EarthPipeline";
     earthPipelineParams.descriptorSetLayouts = {sceneDSL, _earth->getDescriptorSet()->getDescriptorSetLayout()};
     earthPipelineParams.pushConstantRanges = {{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(glm::mat4)}};
-    earthPipelineParams.renderPass = _offscreenRenderPassMSAA;
+    earthPipelineParams.renderPass = _offscreenRenderPassMSAA->getRenderPass();
     earthPipelineParams.msaaSamples = _renderer.getMSAASamples();
     _earthPipeline = std::make_unique<Pipeline>(_ctx, "spv/earth/earth_vert.spv", "spv/earth/earth_frag.spv", earthPipelineParams);
 
@@ -70,7 +89,7 @@ void SolarSystemScene::createPipelines()
     sunPipelineParams.name = "SunPipeline";
     sunPipelineParams.descriptorSetLayouts = {sceneDSL};
     sunPipelineParams.pushConstantRanges = {{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(glm::mat4)}};
-    sunPipelineParams.renderPass = _offscreenRenderPassMSAA;
+    sunPipelineParams.renderPass = _offscreenRenderPassMSAA->getRenderPass();
     sunPipelineParams.msaaSamples = _renderer.getMSAASamples();
     _sunPipeline = std::make_unique<Pipeline>(_ctx, "spv/sun/sun_vert.spv", "spv/sun/sun_frag.spv", sunPipelineParams);
 }
@@ -209,4 +228,51 @@ void SolarSystemScene::createModels()
 
 void SolarSystemScene::createRenderPasses() {
     
+    RenderPassParams offscreenRenderPassParams;
+    offscreenRenderPassParams.name = "Offscreen Renderpass - No MSAA";
+    offscreenRenderPassParams.colorFormat = VK_FORMAT_R8G8B8A8_UNORM;
+    offscreenRenderPassParams.depthFormat = VulkanHelper::findDepthFormat(_ctx);
+    offscreenRenderPassParams.colorLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    offscreenRenderPassParams.depthLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+    offscreenRenderPassParams.useColor = true;
+    offscreenRenderPassParams.useDepth = true;
+    offscreenRenderPassParams.useResolve = false;
+    offscreenRenderPassParams.msaaSamples = VK_SAMPLE_COUNT_1_BIT;
+    _offscreenRenderPass = std::make_unique<RenderPass>(_ctx, offscreenRenderPassParams);
+
+    offscreenRenderPassParams.name = "Offscreen Renderpass - MSAA";
+    offscreenRenderPassParams.colorLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    offscreenRenderPassParams.resolveLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    offscreenRenderPassParams.useResolve = true;
+    offscreenRenderPassParams.msaaSamples = _renderer.getMSAASamples();
+    _offscreenRenderPassMSAA = std::make_unique<RenderPass>(_ctx, offscreenRenderPassParams);
+
+    RenderPassParams screenRenderPassParams;
+    screenRenderPassParams.name = "Onscreen Renderpass";
+    screenRenderPassParams.colorFormat = _renderer.getSwapChain()->getSwapChainImageFormat();
+    screenRenderPassParams.depthFormat = VulkanHelper::findDepthFormat(_ctx);
+    screenRenderPassParams.resolveFormat = _renderer.getSwapChain()->getSwapChainImageFormat();
+    screenRenderPassParams.colorLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    screenRenderPassParams.depthLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+    screenRenderPassParams.resolveLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    screenRenderPassParams.useColor = true;
+    screenRenderPassParams.useDepth = true;
+    screenRenderPassParams.useResolve = true;
+    screenRenderPassParams.msaaSamples = _renderer.getMSAASamples();
+    screenRenderPassParams.isMultiPass = false;
+    _renderPass = std::make_unique<RenderPass>(_ctx, screenRenderPassParams);
+
+    RenderPassParams objectSelectionRenderPassParams;
+    objectSelectionRenderPassParams.name = "Object Selection Renderpass";
+    objectSelectionRenderPassParams.colorFormat = VK_FORMAT_R32_UINT;
+    objectSelectionRenderPassParams.depthFormat = VulkanHelper::findDepthFormat(_ctx);
+    objectSelectionRenderPassParams.colorLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    objectSelectionRenderPassParams.depthLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+    objectSelectionRenderPassParams.useColor = true;
+    objectSelectionRenderPassParams.useDepth = true;
+    objectSelectionRenderPassParams.useResolve = false;
+    objectSelectionRenderPassParams.msaaSamples = VK_SAMPLE_COUNT_1_BIT;
+    objectSelectionRenderPassParams.isMultiPass = false;
+    _objectSelectionRenderPass = std::make_unique<RenderPass>(_ctx, objectSelectionRenderPassParams);
+
 }
