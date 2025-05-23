@@ -1,5 +1,6 @@
 #include "SolarSystemScene.h"
 #include "geometry/MeshFactory.h"
+#include "TextureSampler.h"
 
 
 SolarSystemScene::SolarSystemScene(std::shared_ptr<VulkanContext> ctx, Renderer& renderer)
@@ -31,6 +32,95 @@ void SolarSystemScene::createPipelines()
 {
     VkDescriptorSetLayout sceneDSL = _sceneDescriptorSets[0]->getDescriptorSetLayout();
 
+    // Texture sampler for post-processing
+    _ppTextureSampler = std::make_unique<TextureSampler>(_ctx, 1, VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE);
+
+
+    // Glow pass pipeline
+    PipelineParams glowPassPipelineParams;
+    glowPassPipelineParams.name = "GlowPassPipeline";
+    glowPassPipelineParams.descriptorSetLayouts = {sceneDSL};
+    glowPassPipelineParams.pushConstantRanges = {{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(GlowPassPushConstants)}};
+    glowPassPipelineParams.renderPass = _offscreenRenderPass->getRenderPass();
+    _glowPipeline = std::make_unique<Pipeline>(_ctx, "spv/glow/glow_vert.spv", "spv/glow/glow_frag.spv", glowPassPipelineParams);
+
+    VkDescriptorImageInfo glowPassOutputTexture{};
+    glowPassOutputTexture.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    glowPassOutputTexture.imageView = _offscreenFrameBuffers[0]->getColorImageView();
+    glowPassOutputTexture.sampler = _ppTextureSampler->getSampler();
+
+
+    // Blur pass pipeline (vertical)
+    _blurSettingsUBO = std::make_unique<UniformBuffer<BlurSettings>>(_ctx);
+    _blurSettingsUBO->update(blurSettings);
+
+    std::vector<Descriptor> blurVertDescriptors = {
+        Descriptor(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT, 1, _blurSettingsUBO->getDescriptorInfo()),
+        Descriptor(1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 1, glowPassOutputTexture), // Glow texture
+    };
+    _blurVertDescriptorSet = std::make_unique<DescriptorSet>(_ctx, blurVertDescriptors);
+
+    VkDescriptorImageInfo blurVertPassOutputTexture{};
+    blurVertPassOutputTexture.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    blurVertPassOutputTexture.imageView = _offscreenFrameBuffers[1]->getColorImageView();
+    blurVertPassOutputTexture.sampler = _ppTextureSampler->getSampler();
+
+    PipelineParams blurPassPipelineParams {};
+    blurPassPipelineParams.name = "BlurPassPipeline - Vertical";
+    blurPassPipelineParams.vertexBindingDescription = std::nullopt;
+    blurPassPipelineParams.vertexAttributeDescriptions = {};
+    blurPassPipelineParams.cullMode = VK_CULL_MODE_NONE;
+    blurPassPipelineParams.descriptorSetLayouts = { _blurVertDescriptorSet->getDescriptorSetLayout() }; 
+    blurPassPipelineParams.pushConstantRanges = {};
+    blurPassPipelineParams.renderPass = _offscreenRenderPass->getRenderPass();
+    int blurDirection = 0; // 0 for vertical
+    VkSpecializationMapEntry blurDirectionMapEntry = {0, 0, sizeof(int)};
+    blurPassPipelineParams.fragmentShaderSpecializationInfo = VkSpecializationInfo {1, &blurDirectionMapEntry, sizeof(int), &blurDirection};
+    _blurVertPipeline = std::make_unique<Pipeline>(_ctx, "spv/blur/blur_vert.spv", "spv/blur/blur_frag.spv", blurPassPipelineParams);
+
+
+    // Blur pass pipeline (horizontal)
+    std::vector<Descriptor> blurHorizDescriptors = {
+        Descriptor(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT, 1, _blurSettingsUBO->getDescriptorInfo()),
+        Descriptor(1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 1, blurVertPassOutputTexture), // Blur vert texture
+    };
+    _blurHorizDescriptorSet = std::make_unique<DescriptorSet>(_ctx, blurHorizDescriptors);
+
+    VkDescriptorImageInfo blurHorizPassOutputTexture{};
+    blurHorizPassOutputTexture.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    blurHorizPassOutputTexture.imageView = _offscreenFrameBuffers[2]->getColorImageView();
+    blurHorizPassOutputTexture.sampler = _ppTextureSampler->getSampler();
+
+    blurPassPipelineParams.name = "BlurPassPipeline - Horizontal";
+    blurDirection = 1;     // 1 for horizontal
+    blurPassPipelineParams.renderPass = _offscreenRenderPass->getRenderPass();
+    _blurHorizPipeline = std::make_unique<Pipeline>(_ctx, "spv/blur/blur_vert.spv", "spv/blur/blur_frag.spv", blurPassPipelineParams);
+
+
+    // Composite pass pipeline
+    VkDescriptorImageInfo normalPassOutputTexture{};
+    normalPassOutputTexture.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    normalPassOutputTexture.imageView = _offscreenFrameBuffers[3]->getResolveImageView();
+    normalPassOutputTexture.sampler = _ppTextureSampler->getSampler();
+
+    std::vector<Descriptor> compositeDescriptors = {
+        Descriptor(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 1, blurHorizPassOutputTexture),   // Blur texture
+        Descriptor(1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 1, normalPassOutputTexture),      // Normal scene texture
+    };
+    _compositeDescriptorSet = std::make_unique<DescriptorSet>(_ctx, compositeDescriptors);
+
+    PipelineParams compositePipelineParams {};
+    compositePipelineParams.name = "CompositePipeline";
+    compositePipelineParams.vertexBindingDescription = std::nullopt; // This is a fullscreen triangle, so we don't need vertex binding description
+    compositePipelineParams.vertexAttributeDescriptions = {};
+    compositePipelineParams.cullMode = VK_CULL_MODE_NONE;
+    compositePipelineParams.descriptorSetLayouts = { _compositeDescriptorSet->getDescriptorSetLayout() };
+    compositePipelineParams.pushConstantRanges = {};
+    compositePipelineParams.renderPass = _renderPass->getRenderPass();
+    compositePipelineParams.msaaSamples = _renderer.getMSAASamples();
+    _compositePipeline = std::make_unique<Pipeline>(_ctx, "spv/composite/composite_vert.spv", "spv/composite/composite_frag.spv", compositePipelineParams);
+
+    
     // Planet pipeline
     PipelineParams planetPipelineParams;
     planetPipelineParams.name = "PlanetPipeline";
@@ -275,4 +365,127 @@ void SolarSystemScene::createRenderPasses() {
     objectSelectionRenderPassParams.isMultiPass = false;
     _objectSelectionRenderPass = std::make_unique<RenderPass>(_ctx, objectSelectionRenderPassParams);
 
+}
+
+
+void SolarSystemScene::createFrameBuffers() {
+    
+    _offscreenFrameBuffers.resize(4); // 4 offscreen framebuffers (1 for glow, 1 for vertical blur, 1 for horizontal blur, 1 for normal rendering)
+
+    // Offscreen Framebuffers (No MSAA)
+    FrameBufferParams offscreenFrameBufferParams{};
+    offscreenFrameBufferParams.extent.width = static_cast<int>(_renderer.getSwapChain()->getSwapChainExtent().width);
+    offscreenFrameBufferParams.extent.height = static_cast<int>(_renderer.getSwapChain()->getSwapChainExtent().height);
+    offscreenFrameBufferParams.renderPass = _offscreenRenderPass->getRenderPass();
+    offscreenFrameBufferParams.hasColor = true;
+    offscreenFrameBufferParams.hasDepth = true;
+    offscreenFrameBufferParams.hasResolve = false;
+    offscreenFrameBufferParams.msaaSamples = VK_SAMPLE_COUNT_1_BIT;
+    offscreenFrameBufferParams.colorFormat = VK_FORMAT_R8G8B8A8_UNORM;
+    offscreenFrameBufferParams.depthFormat = VulkanHelper::findDepthFormat(_ctx);
+    offscreenFrameBufferParams.colorUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+    offscreenFrameBufferParams.depthUsage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+    _offscreenFrameBuffers[0] = std::make_unique<FrameBuffer>(_ctx, offscreenFrameBufferParams); // Glow pass framebuffer
+    _offscreenFrameBuffers[1] = std::make_unique<FrameBuffer>(_ctx, offscreenFrameBufferParams); // Vertical blur framebuffer
+    _offscreenFrameBuffers[2] = std::make_unique<FrameBuffer>(_ctx, offscreenFrameBufferParams); // Horizontal blur framebuffer
+
+    // Offscreen Framebuffer (MSAA)
+    offscreenFrameBufferParams.renderPass = _offscreenRenderPassMSAA->getRenderPass();
+    offscreenFrameBufferParams.hasResolve = true;
+    offscreenFrameBufferParams.msaaSamples = _renderer.getMSAASamples();
+    offscreenFrameBufferParams.resolveFormat = VK_FORMAT_R8G8B8A8_UNORM;
+    offscreenFrameBufferParams.colorUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT;
+    offscreenFrameBufferParams.depthUsage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+    offscreenFrameBufferParams.resolveUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+    _offscreenFrameBuffers[3] = std::make_unique<FrameBuffer>(_ctx, offscreenFrameBufferParams); // Normal rendering framebuffer
+
+    // Main Framebuffers
+    FrameBufferParams frameBufferParams{};
+    frameBufferParams.extent = _renderer.getSwapChain()->getSwapChainExtent();
+    frameBufferParams.renderPass = _renderPass->getRenderPass();
+    frameBufferParams.msaaSamples = _renderer.getMSAASamples();
+    frameBufferParams.hasColor = true;
+    frameBufferParams.hasDepth = true;
+    frameBufferParams.hasResolve = true;
+    frameBufferParams.colorFormat = _renderer.getSwapChain()->getSwapChainImageFormat();
+    frameBufferParams.depthFormat = VulkanHelper::findDepthFormat(_ctx);
+    frameBufferParams.colorUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT;
+    frameBufferParams.depthUsage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+    _mainFrameBuffers.resize(_renderer.getSwapChain()->getSwapChainImageViews().size());
+    for (size_t i = 0; i < _renderer.getSwapChain()->getSwapChainImageViews().size(); i++) {
+        frameBufferParams.resolveImageView = _renderer.getSwapChain()->getSwapChainImageViews()[i];
+        _mainFrameBuffers[i] = std::make_unique<FrameBuffer>(_ctx, frameBufferParams);
+    }
+
+    // Object Selection Framebuffer
+    FrameBufferParams objectSelectionFrameBufferParams{};
+    objectSelectionFrameBufferParams.extent = _renderer.getSwapChain()->getSwapChainExtent();
+    objectSelectionFrameBufferParams.renderPass = _objectSelectionRenderPass->getRenderPass();
+    objectSelectionFrameBufferParams.msaaSamples = VK_SAMPLE_COUNT_1_BIT;
+    objectSelectionFrameBufferParams.hasColor = true;
+    objectSelectionFrameBufferParams.hasDepth = true;
+    objectSelectionFrameBufferParams.hasResolve = false;
+    objectSelectionFrameBufferParams.colorFormat = VK_FORMAT_R32_UINT;
+    objectSelectionFrameBufferParams.depthFormat = VulkanHelper::findDepthFormat(_ctx);
+    objectSelectionFrameBufferParams.colorUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+    objectSelectionFrameBufferParams.depthUsage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+    _objectSelectionFrameBuffer = std::make_unique<FrameBuffer>(_ctx, objectSelectionFrameBufferParams);
+}
+
+
+void SolarSystemScene::update(uint32_t currentImage)
+{
+    Scene::update(currentImage);
+
+    //planet displacment logic here
+}
+
+
+void SolarSystemScene::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex)
+{
+    // Begin Command buffer recording
+    VkCommandBufferBeginInfo beginInfo{};
+    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    beginInfo.flags = 0;
+    beginInfo.pInheritanceInfo = nullptr;
+
+    if (vkBeginCommandBuffer(commandBuffer, &beginInfo) != VK_SUCCESS) {
+        spdlog::error("Failed to begin recording command buffer!");
+        return;
+    }
+
+    std::array<VkClearValue, 2> clearValues{};
+    clearValues[0].color = { { 0.0f, 0.0f, 0.0f, 1.0f } }; // Clear color
+    clearValues[1].depthStencil = { 1.0f, 0 };             // Clear depth value
+
+    // Solar System Scene uses bloom effect
+
+    /*
+        First pass (Glow): Render glowing objects to offscreen framebuffer
+    */
+    VkRenderPassBeginInfo renderPassBeginInfo{};
+    renderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+    renderPassBeginInfo.renderPass = _offscreenRenderPass->getRenderPass();
+    renderPassBeginInfo.framebuffer = _offscreenFrameBuffers[0]->getFrameBuffer();
+    renderPassBeginInfo.renderArea.offset = {0, 0};
+    renderPassBeginInfo.renderArea.extent = _offscreenFrameBuffers[0]->getExtent();
+    renderPassBeginInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
+    renderPassBeginInfo.pClearValues = clearValues.data();
+    vkCmdBeginRenderPass(commandBuffer, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+    VkViewport offscreenViewport{};
+    offscreenViewport.x = 0.0f;
+    offscreenViewport.y = 0.0f;
+    offscreenViewport.width = _offscreenFrameBuffers[0]->getExtent().width;
+    offscreenViewport.height = _offscreenFrameBuffers[0]->getExtent().height;
+    offscreenViewport.minDepth = 0.0f;
+    offscreenViewport.maxDepth = 1.0f;
+    vkCmdSetViewport(commandBuffer, 0, 1, &offscreenViewport);
+
+    VkRect2D offscreenScissor{};
+    offscreenScissor.offset = {0, 0};
+    offscreenScissor.extent = _offscreenFrameBuffers[0]->getExtent();
+    vkCmdSetScissor(commandBuffer, 0, 1, &offscreenScissor);
+
+    
 }

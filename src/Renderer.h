@@ -120,7 +120,6 @@ private:
         float blurStrength = 1.f;
     } blurSettings;
     std::unique_ptr<UniformBuffer<BlurSettings>> _blurSettingsUBO;
-    std::unique_ptr<TextureSampler> _postprocessingTextureSampler;
     std::unique_ptr<Pipeline> _blurVertPipeline;
     std::unique_ptr<Pipeline> _blurHorizPipeline;
     std::unique_ptr<DescriptorSet> _blurVertDescriptorSet;

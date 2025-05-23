@@ -15,7 +15,9 @@ public:
 
     // Child classes should implement this method to create their own scene
     virtual void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex) = 0;
-    virtual void update();
+
+    // Update the scene (called every frame before drawing) (0 < currentImage < MAX_FRAMES_IN_FLIGHT)
+    virtual void update(uint32_t currentImage);
 
     // Invalidate (Renderer informs the scene that the swapchain has been recreated)
     //void setSwapChain(std::shared_ptr<SwapChain> swapchain) { _swapChain = std::move(swapchain); }
@@ -42,6 +44,7 @@ protected:
     std::array<std::unique_ptr<UniformBuffer<SceneInfo>>, MAX_FRAMES_IN_FLIGHT> _sceneInfoUBOs;
     std::array<std::unique_ptr<DescriptorSet>, MAX_FRAMES_IN_FLIGHT> _sceneDescriptorSets;
 
+private:
     // Current frame index
     uint32_t _currentFrame = 0;
 };

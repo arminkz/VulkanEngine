@@ -25,8 +25,10 @@ Scene::~Scene()
 }
 
 
-void Scene::update()
+void Scene::update(uint32_t currentImage)
 {
+    _currentFrame = currentImage;
+    
     static auto startTime = std::chrono::high_resolution_clock::now();
     auto currentTime = std::chrono::high_resolution_clock::now();
 
