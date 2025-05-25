@@ -33,7 +33,7 @@ SolarSystemScene::SolarSystemScene(std::shared_ptr<VulkanContext> ctx, std::shar
     
     // Create camera
     _currentTargetObjectID = _sun->getID();
-    Camera::CameraParams cameraParams{};
+    CameraParams cameraParams{};
     cameraParams.target = _sun->getPosition();
     _camera = std::make_unique<Camera>(cameraParams);
 }

@@ -36,9 +36,9 @@ RenderPass::RenderPass(std::shared_ptr<VulkanContext> ctx, RenderPassParams para
 
     std::vector<VkAttachmentDescription> attachments;
     uint32_t attachmentCount = 0;
-    int colorAttachmentIndex = 0;
-    int depthAttachmentIndex = 0;
-    int resolveAttachmentIndex = 0;
+    uint32_t colorAttachmentIndex = 0;
+    uint32_t depthAttachmentIndex = 0;
+    uint32_t resolveAttachmentIndex = 0;
     if (params.useColor) {
         attachments.push_back(colorAttachment);
         colorAttachmentIndex = attachmentCount++;

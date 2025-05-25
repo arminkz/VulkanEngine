@@ -27,6 +27,8 @@ Renderer::~Renderer()
 
 void Renderer::initialize()
 {
+    spdlog::info("Max Frames in flight: {}", MAX_FRAMES_IN_FLIGHT);
+
     // Create swap chain
     _swapChain = std::make_shared<SwapChain>(_ctx);
 

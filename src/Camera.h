@@ -1,21 +1,23 @@
 #pragma once
 #include "stdafx.h"
 
+
+struct CameraParams
+{
+    float radius = 16.0f;
+    float minRadius = 0.1f;  
+    float maxRadius = 1000.0f; 
+
+    glm::vec3 target = glm::vec3(0.);
+
+    glm::vec3 initialUp = glm::vec3(0., 1., 0.); // Up vector
+    glm::vec3 initialForward = glm::vec3(0., 0., -1.); // Forward vector
+};
+
+
 class Camera 
 {
 public:
-
-    struct CameraParams
-    {
-        float radius = 16.0f;
-        float minRadius = 0.1f;  
-        float maxRadius = 1000.0f; 
-
-        glm::vec3 target = glm::vec3(0.);
-
-        glm::vec3 initialUp = glm::vec3(0., 1., 0.); // Up vector
-        glm::vec3 initialForward = glm::vec3(0., 0., -1.); // Forward vector
-    };
 
     explicit Camera(const CameraParams& params = CameraParams());
 
