@@ -183,16 +183,16 @@ void SolarSystemScene::createPipelines()
     // _glowSpherePipeline = std::make_unique<Pipeline>(_ctx, "spv/glowsphere/glowsphere_vert.spv", "spv/glowsphere/glowsphere_frag.spv", glowSpherePipelineParams);
 
     // SkyBox pipeline
-    // PipelineParams skyBoxPipelineParams;
-    // skyBoxPipelineParams.name = "SkyBoxPipeline";
-    // skyBoxPipelineParams.descriptorSetLayouts = {sceneDSL, _skyBox->getDescriptorSet()->getDescriptorSetLayout()};
-    // skyBoxPipelineParams.pushConstantRanges = {{VK_SHADER_STAGE_VERTEX_BIT , 0, sizeof(glm::mat4)}};
-    // skyBoxPipelineParams.renderPass = _offscreenRenderPassMSAA->getRenderPass();
-    // skyBoxPipelineParams.msaaSamples = _msaaSamples;
-    // skyBoxPipelineParams.depthTest = true;
-    // skyBoxPipelineParams.depthWrite = false;
-    // skyBoxPipelineParams.frontFace = VK_FRONT_FACE_CLOCKWISE;
-    // _skyBoxPipeline = std::make_unique<Pipeline>(_ctx, "spv/skybox/skybox_vert.spv", "spv/skybox/skybox_frag.spv", skyBoxPipelineParams);
+    PipelineParams skyBoxPipelineParams;
+    skyBoxPipelineParams.name = "SkyBoxPipeline";
+    skyBoxPipelineParams.descriptorSetLayouts = {sceneDSL, _skyBox->getDescriptorSet()->getDescriptorSetLayout()};
+    skyBoxPipelineParams.pushConstantRanges = {{VK_SHADER_STAGE_VERTEX_BIT , 0, sizeof(glm::mat4)}};
+    skyBoxPipelineParams.renderPass = _offscreenRenderPassMSAA->getRenderPass();
+    skyBoxPipelineParams.msaaSamples = _msaaSamples;
+    skyBoxPipelineParams.depthTest = true;
+    skyBoxPipelineParams.depthWrite = false;
+    skyBoxPipelineParams.frontFace = VK_FRONT_FACE_CLOCKWISE;
+    _skyBoxPipeline = std::make_unique<Pipeline>(_ctx, "spv/skybox/skybox_vert.spv", "spv/skybox/skybox_frag.spv", skyBoxPipelineParams);
 
     // Earth pipeline
     PipelineParams earthPipelineParams;
@@ -225,6 +225,9 @@ void SolarSystemScene::createPipelines()
 
 void SolarSystemScene::connectPipelines()
 {
+    // Set the pipeline for the skybox
+    _skyBox->setPipeline(_skyBoxPipeline);
+
     // Set the pipelines for all planets
     for (const auto& planet : _planets) {
         planet->setPipeline(_planetPipeline);
@@ -243,9 +246,6 @@ void SolarSystemScene::connectPipelines()
     // Earth and sun have their own pipelines
     _sun->setPipeline(_sunPipeline);
     _earth->setPipeline(_earthPipeline);
-
-    // Set the pipeline for the skybox
-    //_skyBox->setPipeline(_skyBoxPipeline);
 }
 
 
@@ -264,9 +264,8 @@ void SolarSystemScene::createModels()
     std::shared_ptr<DeviceMesh> cubeDMesh = std::make_shared<DeviceMesh>(_ctx, cube);
 
     // SkyBox
-    //std::shared_ptr<TextureCubemap> skyTexture = std::make_shared<TextureCubemap>(_ctx, "textures/skybox", VK_FORMAT_R8G8B8A8_SRGB);
-    //_skyBox = std::make_unique<SkyBox>(_ctx, "Skybox", cubeDMesh, cubemapTexture);
-    auto wtf = TextureCubemap(_ctx, "textures/skybox", VK_FORMAT_R8G8B8A8_SRGB);
+    std::shared_ptr<TextureCubemap> skyTexture = std::make_shared<TextureCubemap>(_ctx, "textures/skybox", VK_FORMAT_R8G8B8A8_SRGB);
+    _skyBox = std::make_unique<SkyBox>(_ctx, "Skybox", cubeDMesh, skyTexture);
 
     // Sun
     _sun = std::make_shared<Sun>(_ctx, "Sun", sphereDMesh, sizeSun);
@@ -693,6 +692,7 @@ void SolarSystemScene::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32
     vkCmdSetScissor(commandBuffer, 0, 1, &offscreenScissor);
 
     // Draw skybox
+    _skyBox->draw(commandBuffer, *this);
 
     // Draw sun
     _sun->draw(commandBuffer, *this);
@@ -702,7 +702,7 @@ void SolarSystemScene::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32
         planet->draw(commandBuffer, *this);
     }
 
-    // Draw GLow spheres
+    // Draw Glow spheres
 
     // Draw orbits
     for (const auto& orbit : _orbits) {

@@ -74,8 +74,13 @@ TextureCubemap::TextureCubemap(std::shared_ptr<VulkanContext> ctx, const std::st
     VulkanHelper::transitionImageLayout(_ctx, _cubemapImage, format, 1, 6, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
     // Create ImageView
-    VulkanHelper::createImageView(_ctx, _cubemapImage, format, 1, 6, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_VIEW_TYPE_CUBE);
-    
+    _cubemapImageView = VulkanHelper::createImageView(_ctx, _cubemapImage, format, 1, 6, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_VIEW_TYPE_CUBE);
+
+    // Create texture sampler
+    // Retrieve the physical device properties for the texture sampler
+    VkPhysicalDeviceProperties properties{};
+    vkGetPhysicalDeviceProperties(_ctx->physicalDevice, &properties);
+
     // Create sampler
     VkSamplerCreateInfo samplerInfo{};
     samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
@@ -85,7 +90,7 @@ TextureCubemap::TextureCubemap(std::shared_ptr<VulkanContext> ctx, const std::st
     samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
     samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
     samplerInfo.anisotropyEnable = VK_TRUE;
-    samplerInfo.maxAnisotropy = 16;
+    samplerInfo.maxAnisotropy = properties.limits.maxSamplerAnisotropy;
     samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
     samplerInfo.unnormalizedCoordinates = VK_FALSE;
     samplerInfo.compareEnable = VK_FALSE;
