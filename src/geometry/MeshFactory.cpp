@@ -307,7 +307,6 @@ namespace MeshFactory {
 
         for (const auto& index : indices) {
             mesh.indices.push_back(index);
-            +
         }
 
         return mesh;

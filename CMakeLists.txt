@@ -45,6 +45,8 @@ file(GLOB SOURCES
     src/loader/*
     src/utilities/*
     src/imgui-impl/*
+    src/models/*
+    src/interface/*
 )
 
 # Add resources.rc file to the sources if on Windows

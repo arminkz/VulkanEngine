@@ -2,7 +2,7 @@
 
 #include "stb_image.h"
 
-TextureCubemap::TextureCubemap(std::shared_ptr<VulkanContext> ctx, std::string& path, VkFormat format)
+TextureCubemap::TextureCubemap(std::shared_ptr<VulkanContext> ctx, const std::string& path, VkFormat format)
     : _ctx(std::move(ctx))
 {
     //cubemap images
@@ -94,6 +94,8 @@ TextureCubemap::TextureCubemap(std::shared_ptr<VulkanContext> ctx, std::string& 
     if (vkCreateSampler(_ctx->device, &samplerInfo, nullptr, &_cubemapSampler) != VK_SUCCESS) {
         throw std::runtime_error("failed to create texture sampler!");
     }
+
+    spdlog::info("Cubemap texture loaded successfully.");
 
 }
 

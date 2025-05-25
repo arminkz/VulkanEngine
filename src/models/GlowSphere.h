@@ -1,8 +1,9 @@
 #pragma once
+
 #include "stdafx.h"
 #include "VulkanContext.h"
 #include "geometry/DeviceMesh.h"
-#include "Model.h"
+#include "interface/Model.h"
 #include "Scene.h"
 #include "Pipeline.h"
 

@@ -69,14 +69,11 @@ void GUI::initResources(VkRenderPass renderPass, VkSampleCountFlagBits msaaSampl
     io.Fonts->GetTexDataAsRGBA32(&fontData, &texWidth, &texHeight);
     
     // Create device texture for font atlas
-    _fontTexture = std::make_unique<DeviceTexture>(_ctx, fontData, texWidth, texHeight, VK_FORMAT_R8G8B8A8_UNORM, 1);
-
-    // Create texture sampler for font atlas
-    _textureSampler = std::make_unique<TextureSampler>(_ctx, 1);
+    _fontTexture = std::make_unique<Texture2D>(_ctx, fontData, texWidth, texHeight, VK_FORMAT_R8G8B8A8_UNORM, 1);
 
     // Descriptor set layout
     std::vector<Descriptor> descriptors = {
-        Descriptor(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 1, _fontTexture->getDescriptorInfo(_textureSampler->getSampler())) // Font texture
+        Descriptor(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 1, _fontTexture->getDescriptorInfo()) // Font texture
     };
     _descriptorSet = std::make_unique<DescriptorSet>(_ctx, descriptors);
 
@@ -123,7 +120,7 @@ void GUI::initResources(VkRenderPass renderPass, VkSampleCountFlagBits msaaSampl
     imguiPipelineParams.vertexAttributeDescriptions = attributeDescriptions;
 
     // Create pipeline
-    _pipeline = std::make_unique<Pipeline>(_ctx, "spv/imgui_vert.spv", "spv/imgui_frag.spv", imguiPipelineParams);
+    _pipeline = std::make_unique<Pipeline>(_ctx, "spv/imgui/imgui_vert.spv", "spv/imgui/imgui_frag.spv", imguiPipelineParams);
 }
 
 void GUI::newFrame()

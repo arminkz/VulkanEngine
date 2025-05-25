@@ -1,11 +1,41 @@
 #include "SolarSystemScene.h"
 #include "geometry/MeshFactory.h"
 #include "TextureSampler.h"
+#include "TextureCubemap.h"
 
 
-SolarSystemScene::SolarSystemScene(std::shared_ptr<VulkanContext> ctx, Renderer& renderer)
-    : Scene(std::move(ctx), renderer)
+SolarSystemScene::SolarSystemScene(std::shared_ptr<VulkanContext> ctx, std::shared_ptr<SwapChain> swapChain)
+    : Scene(std::move(ctx), std::move(swapChain))
 {
+    // MSAA
+    _msaaSamples = VulkanHelper::getMaxMsaaSampleCount(_ctx);
+
+    // Initialize scene information
+    _sceneInfo.view = glm::mat4(1.0f);
+    _sceneInfo.projection = glm::mat4(1.0f);
+    _sceneInfo.time = 0.0f;
+    _sceneInfo.cameraPosition = glm::vec3(0.0f);
+    _sceneInfo.lightColor = glm::vec3(1.0f, 1.0f, 1.0f);
+
+    // Create UBO for scene information
+    for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+        _sceneInfoUBOs[i] = std::make_unique<UniformBuffer<SceneInfo>>(_ctx);
+        _sceneDescriptorSets[i] = std::make_unique<DescriptorSet>(_ctx, std::vector<Descriptor>{
+            Descriptor(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 1, _sceneInfoUBOs[i]->getDescriptorInfo())
+        });
+    }
+
+    createRenderPasses();
+    createFrameBuffers();
+    createModels();
+    createPipelines();
+    connectPipelines();
+    
+    // Create camera
+    _currentTargetObjectID = _sun->getID();
+    Camera::CameraParams cameraParams{};
+    cameraParams.target = _sun->getPosition();
+    _camera = std::make_unique<Camera>(cameraParams);
 }
 
 
@@ -34,7 +64,6 @@ void SolarSystemScene::createPipelines()
 
     // Texture sampler for post-processing
     _ppTextureSampler = std::make_unique<TextureSampler>(_ctx, 1, VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE);
-
 
     // Glow pass pipeline
     PipelineParams glowPassPipelineParams;
@@ -88,7 +117,7 @@ void SolarSystemScene::createPipelines()
 
     VkDescriptorImageInfo blurHorizPassOutputTexture{};
     blurHorizPassOutputTexture.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    blurHorizPassOutputTexture.imageView = _offscreenFrameBuffers[2]->getColorImageView();
+    blurHorizPassOutputTexture.imageView = _offscreenFrameBuffers[2]->getColorImageView();;
     blurHorizPassOutputTexture.sampler = _ppTextureSampler->getSampler();
 
     blurPassPipelineParams.name = "BlurPassPipeline - Horizontal";
@@ -117,7 +146,7 @@ void SolarSystemScene::createPipelines()
     compositePipelineParams.descriptorSetLayouts = { _compositeDescriptorSet->getDescriptorSetLayout() };
     compositePipelineParams.pushConstantRanges = {};
     compositePipelineParams.renderPass = _renderPass->getRenderPass();
-    compositePipelineParams.msaaSamples = _renderer.getMSAASamples();
+    compositePipelineParams.msaaSamples = _msaaSamples;
     _compositePipeline = std::make_unique<Pipeline>(_ctx, "spv/composite/composite_vert.spv", "spv/composite/composite_frag.spv", compositePipelineParams);
 
     
@@ -127,7 +156,7 @@ void SolarSystemScene::createPipelines()
     planetPipelineParams.descriptorSetLayouts = {sceneDSL, _planets[0]->getDescriptorSet()->getDescriptorSetLayout()};
     planetPipelineParams.pushConstantRanges = {{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(glm::mat4)}};
     planetPipelineParams.renderPass = _offscreenRenderPassMSAA->getRenderPass();
-    planetPipelineParams.msaaSamples = _renderer.getMSAASamples();
+    planetPipelineParams.msaaSamples = _msaaSamples;
     _planetPipeline = std::make_unique<Pipeline>(_ctx, "spv/planet/planet_vert.spv", "spv/planet/planet_frag.spv", planetPipelineParams);
 
     // Orbit pipeline
@@ -136,34 +165,34 @@ void SolarSystemScene::createPipelines()
     orbitPipelineParams.descriptorSetLayouts = {sceneDSL};
     orbitPipelineParams.pushConstantRanges = {{VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(glm::mat4)}};
     orbitPipelineParams.renderPass = _offscreenRenderPassMSAA->getRenderPass();
-    orbitPipelineParams.msaaSamples = _renderer.getMSAASamples();
+    orbitPipelineParams.msaaSamples = _msaaSamples;
     orbitPipelineParams.depthTest = true;
     orbitPipelineParams.depthWrite = false;
     _orbitPipeline = std::make_unique<Pipeline>(_ctx, "spv/orbit/orbit_vert.spv", "spv/orbit/orbit_frag.spv", orbitPipelineParams);
 
     // GlowSphere pipeline
-    PipelineParams glowSpherePipelineParams;
-    glowSpherePipelineParams.name = "GlowSpherePipeline";
-    glowSpherePipelineParams.descriptorSetLayouts = {sceneDSL, _glowSpheres[0]->getDescriptorSet()->getDescriptorSetLayout()};
-    glowSpherePipelineParams.pushConstantRanges = {{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(glm::mat4)}};
-    glowSpherePipelineParams.renderPass = _offscreenRenderPassMSAA->getRenderPass();
-    glowSpherePipelineParams.msaaSamples = _renderer.getMSAASamples();
-    glowSpherePipelineParams.depthTest = true;
-    glowSpherePipelineParams.depthWrite = false;
-    glowSpherePipelineParams.frontFace = VK_FRONT_FACE_CLOCKWISE;
-    _glowSpherePipeline = std::make_unique<Pipeline>(_ctx, "spv/glowsphere/glowsphere_vert.spv", "spv/glowsphere/glowsphere_frag.spv", glowSpherePipelineParams);
+    // PipelineParams glowSpherePipelineParams;
+    // glowSpherePipelineParams.name = "GlowSpherePipeline";
+    // glowSpherePipelineParams.descriptorSetLayouts = {sceneDSL, _glowSpheres[0]->getDescriptorSet()->getDescriptorSetLayout()};
+    // glowSpherePipelineParams.pushConstantRanges = {{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(glm::mat4)}};
+    // glowSpherePipelineParams.renderPass = _offscreenRenderPassMSAA->getRenderPass();
+    // glowSpherePipelineParams.msaaSamples = _msaaSamples;
+    // glowSpherePipelineParams.depthTest = true;
+    // glowSpherePipelineParams.depthWrite = false;
+    // glowSpherePipelineParams.frontFace = VK_FRONT_FACE_CLOCKWISE;
+    // _glowSpherePipeline = std::make_unique<Pipeline>(_ctx, "spv/glowsphere/glowsphere_vert.spv", "spv/glowsphere/glowsphere_frag.spv", glowSpherePipelineParams);
 
     // SkyBox pipeline
-    PipelineParams skyBoxPipelineParams;
-    skyBoxPipelineParams.name = "SkyBoxPipeline";
-    skyBoxPipelineParams.descriptorSetLayouts = {sceneDSL, _skyBox->getDescriptorSet()->getDescriptorSetLayout()};
-    skyBoxPipelineParams.pushConstantRanges = {{VK_SHADER_STAGE_VERTEX_BIT , 0, sizeof(glm::mat4)}};
-    skyBoxPipelineParams.renderPass = _offscreenRenderPassMSAA->getRenderPass();
-    skyBoxPipelineParams.msaaSamples = _renderer.getMSAASamples();
-    skyBoxPipelineParams.depthTest = true;
-    skyBoxPipelineParams.depthWrite = false;
-    skyBoxPipelineParams.frontFace = VK_FRONT_FACE_CLOCKWISE;
-    _skyBoxPipeline = std::make_unique<Pipeline>(_ctx, "spv/skybox/skybox_vert.spv", "spv/skybox/skybox_frag.spv", skyBoxPipelineParams);
+    // PipelineParams skyBoxPipelineParams;
+    // skyBoxPipelineParams.name = "SkyBoxPipeline";
+    // skyBoxPipelineParams.descriptorSetLayouts = {sceneDSL, _skyBox->getDescriptorSet()->getDescriptorSetLayout()};
+    // skyBoxPipelineParams.pushConstantRanges = {{VK_SHADER_STAGE_VERTEX_BIT , 0, sizeof(glm::mat4)}};
+    // skyBoxPipelineParams.renderPass = _offscreenRenderPassMSAA->getRenderPass();
+    // skyBoxPipelineParams.msaaSamples = _msaaSamples;
+    // skyBoxPipelineParams.depthTest = true;
+    // skyBoxPipelineParams.depthWrite = false;
+    // skyBoxPipelineParams.frontFace = VK_FRONT_FACE_CLOCKWISE;
+    // _skyBoxPipeline = std::make_unique<Pipeline>(_ctx, "spv/skybox/skybox_vert.spv", "spv/skybox/skybox_frag.spv", skyBoxPipelineParams);
 
     // Earth pipeline
     PipelineParams earthPipelineParams;
@@ -171,7 +200,7 @@ void SolarSystemScene::createPipelines()
     earthPipelineParams.descriptorSetLayouts = {sceneDSL, _earth->getDescriptorSet()->getDescriptorSetLayout()};
     earthPipelineParams.pushConstantRanges = {{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(glm::mat4)}};
     earthPipelineParams.renderPass = _offscreenRenderPassMSAA->getRenderPass();
-    earthPipelineParams.msaaSamples = _renderer.getMSAASamples();
+    earthPipelineParams.msaaSamples = _msaaSamples;
     _earthPipeline = std::make_unique<Pipeline>(_ctx, "spv/earth/earth_vert.spv", "spv/earth/earth_frag.spv", earthPipelineParams);
 
     // Sun pipeline
@@ -180,8 +209,17 @@ void SolarSystemScene::createPipelines()
     sunPipelineParams.descriptorSetLayouts = {sceneDSL};
     sunPipelineParams.pushConstantRanges = {{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(glm::mat4)}};
     sunPipelineParams.renderPass = _offscreenRenderPassMSAA->getRenderPass();
-    sunPipelineParams.msaaSamples = _renderer.getMSAASamples();
+    sunPipelineParams.msaaSamples = _msaaSamples;
     _sunPipeline = std::make_unique<Pipeline>(_ctx, "spv/sun/sun_vert.spv", "spv/sun/sun_frag.spv", sunPipelineParams);
+
+    // Object selection pipeline
+    PipelineParams objectSelectionPipelineParams;
+    objectSelectionPipelineParams.name = "ObjectSelectionPipeline";
+    objectSelectionPipelineParams.descriptorSetLayouts = {sceneDSL};
+    objectSelectionPipelineParams.pushConstantRanges = {{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(ObjectSelectionPushConstants)}};
+    objectSelectionPipelineParams.renderPass = _objectSelectionRenderPass->getRenderPass();
+    objectSelectionPipelineParams.blendEnable = false;
+    _objectSelectionPipeline = std::make_unique<Pipeline>(_ctx, "spv/selection/select_vert.spv", "spv/selection/select_frag.spv", objectSelectionPipelineParams);
 }
 
 
@@ -198,16 +236,16 @@ void SolarSystemScene::connectPipelines()
     }
 
     // Set the pipeline for glow spheres
-    for (const auto& glowSphere : _glowSpheres) {
-        glowSphere->setPipeline(_glowSpherePipeline);
-    }
+    // for (const auto& glowSphere : _glowSpheres) {
+    //     glowSphere->setPipeline(_glowSpherePipeline);
+    // }
 
     // Earth and sun have their own pipelines
     _sun->setPipeline(_sunPipeline);
     _earth->setPipeline(_earthPipeline);
 
     // Set the pipeline for the skybox
-    _skyBox->setPipeline(_skyBoxPipeline);
+    //_skyBox->setPipeline(_skyBoxPipeline);
 }
 
 
@@ -226,19 +264,24 @@ void SolarSystemScene::createModels()
     std::shared_ptr<DeviceMesh> cubeDMesh = std::make_shared<DeviceMesh>(_ctx, cube);
 
     // SkyBox
+    //std::shared_ptr<TextureCubemap> skyTexture = std::make_shared<TextureCubemap>(_ctx, "textures/skybox", VK_FORMAT_R8G8B8A8_SRGB);
     //_skyBox = std::make_unique<SkyBox>(_ctx, "Skybox", cubeDMesh, cubemapTexture);
+    auto wtf = TextureCubemap(_ctx, "textures/skybox", VK_FORMAT_R8G8B8A8_SRGB);
 
     // Sun
     _sun = std::make_shared<Sun>(_ctx, "Sun", sphereDMesh, sizeSun);
+    _selectableObjects[_sun->getID()] = _sun;
 
     // Mercury
     std::shared_ptr<Texture2D> mercuryColorTexture = std::make_shared<Texture2D>(_ctx, "textures/mercury/8k_mercury.jpg", VK_FORMAT_R8G8B8A8_SRGB);
     std::shared_ptr<Planet> mercury = std::make_shared<Planet>(_ctx, "Mercury", sphereDMesh, mercuryColorTexture, _sun, sizeMercury, orbitRadMercury);
+    _selectableObjects[mercury->getID()] = mercury;
     _planets.push_back(std::move(mercury));
 
     // Venus
     std::shared_ptr<Texture2D> venusColorTexture = std::make_shared<Texture2D>(_ctx, "textures/venus/4k_venus_atmosphere.jpg", VK_FORMAT_R8G8B8A8_SRGB);
     std::shared_ptr<Planet> venus = std::make_shared<Planet>(_ctx, "Venus", sphereDMesh, venusColorTexture, _sun, sizeVenus, orbitRadVenus);
+    _selectableObjects[venus->getID()] = venus;
     _planets.push_back(std::move(venus));
 
     // Earth
@@ -249,21 +292,31 @@ void SolarSystemScene::createModels()
     std::shared_ptr<Texture2D> overlayTexture = std::make_shared<Texture2D>(_ctx, "textures/earth/8k_earth_clouds.png", VK_FORMAT_R8G8B8A8_SRGB);
     std::shared_ptr<Earth> earth = std::make_shared<Earth>(_ctx, "Earth", sphereDMesh, colorTexture, unlitTexture, normalTexture, specularTexture, overlayTexture, _sun, sizeEarth, orbitRadEarth);
     _earth = earth;
+    _selectableObjects[earth->getID()] = earth;
     _planets.push_back(std::move(earth));
+
+    // Earth Moon
+    std::shared_ptr<Texture2D> moonColorTexture = std::make_shared<Texture2D>(_ctx, "textures/moon/8k_moon.jpg", VK_FORMAT_R8G8B8A8_SRGB);
+    std::shared_ptr<Planet> moon = std::make_shared<Planet>(_ctx, "Moon", sphereDMesh, moonColorTexture, _earth, sizeMoon, orbitRadMoon);
+    _selectableObjects[moon->getID()] = moon;
+    _planets.push_back(std::move(moon));
 
     // Mars
     std::shared_ptr<Texture2D> marsColorTexture = std::make_shared<Texture2D>(_ctx, "textures/mars/8k_mars.jpg", VK_FORMAT_R8G8B8A8_SRGB);
     std::shared_ptr<Planet> mars = std::make_shared<Planet>(_ctx, "Mars", sphereDMesh, marsColorTexture, _sun, sizeMars, orbitRadMars);
+    _selectableObjects[mars->getID()] = mars;
     _planets.push_back(std::move(mars));
 
     // Jupiter
     std::shared_ptr<Texture2D> jupiterColorTexture = std::make_shared<Texture2D>(_ctx, "textures/jupiter/4k_jupiter.jpg", VK_FORMAT_R8G8B8A8_SRGB);
     std::shared_ptr<Planet> jupiter = std::make_shared<Planet>(_ctx, "Jupiter", sphereDMesh, jupiterColorTexture, _sun, sizeJupiter, orbitRadJupiter);
+    _selectableObjects[jupiter->getID()] = jupiter;
     _planets.push_back(std::move(jupiter));
 
     // Saturn
     std::shared_ptr<Texture2D> saturnColorTexture = std::make_shared<Texture2D>(_ctx, "textures/saturn/8k_saturn.jpg", VK_FORMAT_R8G8B8A8_SRGB);
     std::shared_ptr<Planet> saturn = std::make_shared<Planet>(_ctx, "Saturn", sphereDMesh, saturnColorTexture, _sun, sizeSaturn, orbitRadSaturn);
+    _selectableObjects[saturn->getID()] = saturn;
     _planets.push_back(std::move(saturn));
 
     // Saturn Ring
@@ -274,16 +327,19 @@ void SolarSystemScene::createModels()
     // Uranus
     std::shared_ptr<Texture2D> uranusColorTexture = std::make_shared<Texture2D>(_ctx, "textures/uranus/1k_uranus.jpg", VK_FORMAT_R8G8B8A8_SRGB);
     std::shared_ptr<Planet> uranus = std::make_shared<Planet>(_ctx, "Uranus", sphereDMesh, uranusColorTexture, _sun, sizeUranus, orbitRadUranus);
+    _selectableObjects[uranus->getID()] = uranus;
     _planets.push_back(std::move(uranus));
 
     // Neptune
     std::shared_ptr<Texture2D> neptuneColorTexture = std::make_shared<Texture2D>(_ctx, "textures/neptune/2k_neptune.jpg", VK_FORMAT_R8G8B8A8_SRGB);
     std::shared_ptr<Planet> neptune = std::make_shared<Planet>(_ctx, "Neptune", sphereDMesh, neptuneColorTexture, _sun, sizeNeptune, orbitRadNeptune);
+    _selectableObjects[neptune->getID()] = neptune;
     _planets.push_back(std::move(neptune));
 
     // Pluto
     std::shared_ptr<Texture2D> plutoColorTexture = std::make_shared<Texture2D>(_ctx, "textures/pluto/2k_pluto.jpg", VK_FORMAT_R8G8B8A8_SRGB);
     std::shared_ptr<Planet> pluto = std::make_shared<Planet>(_ctx, "Pluto", sphereDMesh, plutoColorTexture, _sun, sizePluto, orbitRadPluto);
+    _selectableObjects[pluto->getID()] = pluto;
     _planets.push_back(std::move(pluto));
 
 
@@ -295,6 +351,9 @@ void SolarSystemScene::createModels()
 
     // Earth Orbit
     _orbits.push_back(std::make_unique<Orbit>(_ctx, "EarthOrbit", quadDMesh, _sun, orbitRadEarth));
+
+    // Moon Orbit
+    _orbits.push_back(std::make_unique<Orbit>(_ctx, "MoonOrbit", quadDMesh, _earth, orbitRadMoon));
 
     // Mars Orbit
     _orbits.push_back(std::make_unique<Orbit>(_ctx, "MarsOrbit", quadDMesh, _sun, orbitRadMars));
@@ -313,6 +372,10 @@ void SolarSystemScene::createModels()
 
     // Pluto Orbit
     _orbits.push_back(std::make_unique<Orbit>(_ctx, "PlutoOrbit", quadDMesh, _sun, orbitRadPluto));
+
+
+    // Glow spheres
+    // _glowSpheres.push_back(std::make_unique<GlowSphere>(_ctx, "SunGlow", sphereDMesh, _sun, sizeSun * 1.3f));
 }
 
 
@@ -322,8 +385,8 @@ void SolarSystemScene::createRenderPasses() {
     offscreenRenderPassParams.name = "Offscreen Renderpass - No MSAA";
     offscreenRenderPassParams.colorFormat = VK_FORMAT_R8G8B8A8_UNORM;
     offscreenRenderPassParams.depthFormat = VulkanHelper::findDepthFormat(_ctx);
-    offscreenRenderPassParams.colorLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    offscreenRenderPassParams.depthLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+    offscreenRenderPassParams.colorAttachmentLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    offscreenRenderPassParams.depthAttachmentLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
     offscreenRenderPassParams.useColor = true;
     offscreenRenderPassParams.useDepth = true;
     offscreenRenderPassParams.useResolve = false;
@@ -331,24 +394,25 @@ void SolarSystemScene::createRenderPasses() {
     _offscreenRenderPass = std::make_unique<RenderPass>(_ctx, offscreenRenderPassParams);
 
     offscreenRenderPassParams.name = "Offscreen Renderpass - MSAA";
-    offscreenRenderPassParams.colorLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-    offscreenRenderPassParams.resolveLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    offscreenRenderPassParams.resolveFormat = VK_FORMAT_R8G8B8A8_UNORM;
+    offscreenRenderPassParams.colorAttachmentLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    offscreenRenderPassParams.resolveAttachmentLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
     offscreenRenderPassParams.useResolve = true;
-    offscreenRenderPassParams.msaaSamples = _renderer.getMSAASamples();
+    offscreenRenderPassParams.msaaSamples = _msaaSamples;
     _offscreenRenderPassMSAA = std::make_unique<RenderPass>(_ctx, offscreenRenderPassParams);
 
     RenderPassParams screenRenderPassParams;
     screenRenderPassParams.name = "Onscreen Renderpass";
-    screenRenderPassParams.colorFormat = _renderer.getSwapChain()->getSwapChainImageFormat();
+    screenRenderPassParams.colorFormat = _swapChain->getSwapChainImageFormat();
     screenRenderPassParams.depthFormat = VulkanHelper::findDepthFormat(_ctx);
-    screenRenderPassParams.resolveFormat = _renderer.getSwapChain()->getSwapChainImageFormat();
-    screenRenderPassParams.colorLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-    screenRenderPassParams.depthLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-    screenRenderPassParams.resolveLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    screenRenderPassParams.resolveFormat = _swapChain->getSwapChainImageFormat();
+    screenRenderPassParams.colorAttachmentLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    screenRenderPassParams.depthAttachmentLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+    screenRenderPassParams.resolveAttachmentLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
     screenRenderPassParams.useColor = true;
     screenRenderPassParams.useDepth = true;
     screenRenderPassParams.useResolve = true;
-    screenRenderPassParams.msaaSamples = _renderer.getMSAASamples();
+    screenRenderPassParams.msaaSamples = _msaaSamples;
     screenRenderPassParams.isMultiPass = false;
     _renderPass = std::make_unique<RenderPass>(_ctx, screenRenderPassParams);
 
@@ -356,8 +420,8 @@ void SolarSystemScene::createRenderPasses() {
     objectSelectionRenderPassParams.name = "Object Selection Renderpass";
     objectSelectionRenderPassParams.colorFormat = VK_FORMAT_R32_UINT;
     objectSelectionRenderPassParams.depthFormat = VulkanHelper::findDepthFormat(_ctx);
-    objectSelectionRenderPassParams.colorLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-    objectSelectionRenderPassParams.depthLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+    objectSelectionRenderPassParams.colorAttachmentLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    objectSelectionRenderPassParams.depthAttachmentLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
     objectSelectionRenderPassParams.useColor = true;
     objectSelectionRenderPassParams.useDepth = true;
     objectSelectionRenderPassParams.useResolve = false;
@@ -374,8 +438,8 @@ void SolarSystemScene::createFrameBuffers() {
 
     // Offscreen Framebuffers (No MSAA)
     FrameBufferParams offscreenFrameBufferParams{};
-    offscreenFrameBufferParams.extent.width = static_cast<int>(_renderer.getSwapChain()->getSwapChainExtent().width);
-    offscreenFrameBufferParams.extent.height = static_cast<int>(_renderer.getSwapChain()->getSwapChainExtent().height);
+    offscreenFrameBufferParams.extent.width = static_cast<int>(_swapChain->getSwapChainExtent().width);
+    offscreenFrameBufferParams.extent.height = static_cast<int>(_swapChain->getSwapChainExtent().height);
     offscreenFrameBufferParams.renderPass = _offscreenRenderPass->getRenderPass();
     offscreenFrameBufferParams.hasColor = true;
     offscreenFrameBufferParams.hasDepth = true;
@@ -392,7 +456,7 @@ void SolarSystemScene::createFrameBuffers() {
     // Offscreen Framebuffer (MSAA)
     offscreenFrameBufferParams.renderPass = _offscreenRenderPassMSAA->getRenderPass();
     offscreenFrameBufferParams.hasResolve = true;
-    offscreenFrameBufferParams.msaaSamples = _renderer.getMSAASamples();
+    offscreenFrameBufferParams.msaaSamples = _msaaSamples;
     offscreenFrameBufferParams.resolveFormat = VK_FORMAT_R8G8B8A8_UNORM;
     offscreenFrameBufferParams.colorUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT;
     offscreenFrameBufferParams.depthUsage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
@@ -401,25 +465,25 @@ void SolarSystemScene::createFrameBuffers() {
 
     // Main Framebuffers
     FrameBufferParams frameBufferParams{};
-    frameBufferParams.extent = _renderer.getSwapChain()->getSwapChainExtent();
+    frameBufferParams.extent = _swapChain->getSwapChainExtent();
     frameBufferParams.renderPass = _renderPass->getRenderPass();
-    frameBufferParams.msaaSamples = _renderer.getMSAASamples();
+    frameBufferParams.msaaSamples = _msaaSamples;
     frameBufferParams.hasColor = true;
     frameBufferParams.hasDepth = true;
     frameBufferParams.hasResolve = true;
-    frameBufferParams.colorFormat = _renderer.getSwapChain()->getSwapChainImageFormat();
+    frameBufferParams.colorFormat = _swapChain->getSwapChainImageFormat();
     frameBufferParams.depthFormat = VulkanHelper::findDepthFormat(_ctx);
     frameBufferParams.colorUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT;
     frameBufferParams.depthUsage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
-    _mainFrameBuffers.resize(_renderer.getSwapChain()->getSwapChainImageViews().size());
-    for (size_t i = 0; i < _renderer.getSwapChain()->getSwapChainImageViews().size(); i++) {
-        frameBufferParams.resolveImageView = _renderer.getSwapChain()->getSwapChainImageViews()[i];
+    _mainFrameBuffers.resize(_swapChain->getSwapChainImageViews().size());
+    for (size_t i = 0; i < _swapChain->getSwapChainImageViews().size(); i++) {
+        frameBufferParams.resolveImageView = _swapChain->getSwapChainImageViews()[i];
         _mainFrameBuffers[i] = std::make_unique<FrameBuffer>(_ctx, frameBufferParams);
     }
 
     // Object Selection Framebuffer
     FrameBufferParams objectSelectionFrameBufferParams{};
-    objectSelectionFrameBufferParams.extent = _renderer.getSwapChain()->getSwapChainExtent();
+    objectSelectionFrameBufferParams.extent = _swapChain->getSwapChainExtent();
     objectSelectionFrameBufferParams.renderPass = _objectSelectionRenderPass->getRenderPass();
     objectSelectionFrameBufferParams.msaaSamples = VK_SAMPLE_COUNT_1_BIT;
     objectSelectionFrameBufferParams.hasColor = true;
@@ -437,11 +501,38 @@ void SolarSystemScene::update(uint32_t currentImage)
 {
     Scene::update(currentImage);
 
-    //planet displacment logic here
+    static auto startTime = std::chrono::high_resolution_clock::now();
+    auto currentTime = std::chrono::high_resolution_clock::now();
+
+    float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
+
+    VkExtent2D swapChainExtent = _swapChain->getSwapChainExtent();
+
+    // Update camera position based on time
+    _camera->advanceAnimation(time - _sceneInfo.time);
+
+    // Update SceneInfo
+    _sceneInfo.view = _camera->getViewMatrix();
+    _sceneInfo.projection = glm::perspective(glm::radians(45.f), (float)swapChainExtent.width / (float)swapChainExtent.height, 0.1f, 2000.f);
+    _sceneInfo.projection[1][1] *= -1; // Invert Y axis for Vulkan
+    _sceneInfo.time = time;
+    _sceneInfo.cameraPosition = _camera->getPosition();
+
+    // Update the scene information UBO
+    _sceneInfoUBOs[_currentFrame]->update(_sceneInfo);
+
+    // Update the planet positions
+    _sun->calculateModelMatrix();
+    for (const auto& planet : _planets) {
+        planet->calculateModelMatrix();
+    }
+    for (const auto& orbit : _orbits) {
+        orbit->calculateModelMatrix();
+    }
 }
 
 
-void SolarSystemScene::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex)
+void SolarSystemScene::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t targetSwapImageIndex)
 {
     // Begin Command buffer recording
     VkCommandBufferBeginInfo beginInfo{};
@@ -487,5 +578,324 @@ void SolarSystemScene::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32
     offscreenScissor.extent = _offscreenFrameBuffers[0]->getExtent();
     vkCmdSetScissor(commandBuffer, 0, 1, &offscreenScissor);
 
+    // Bind glow pipeline
+    _glowPipeline->bind(commandBuffer);
+
+    // Draw sun and planets
+    {
+        VkBuffer vertexBuffers[] = {_sun->getDeviceMesh()->getVertexBuffer()};
+        VkDeviceSize offsets[] = {0};
+        vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets); // We can have multiple vertex buffers
+        vkCmdBindIndexBuffer(commandBuffer, _sun->getDeviceMesh()->getIndexBuffer(), 0, VK_INDEX_TYPE_UINT32); // We can only use one index buffer at a time
+
+        std::array<VkDescriptorSet, 1> descriptorSets = {
+            _sceneDescriptorSets[_currentFrame]->getDescriptorSet()  // Per-frame descriptor set
+        };
+        vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, _glowPipeline->getPipelineLayout(), 0, 1, descriptorSets.data(), 0, nullptr);
+
+        // Push constants for model
+        GlowPassPushConstants pushConstants{};
+        pushConstants.model = _sun->getModelMatrix();
+        pushConstants.glowColor = _sun->glowColor;
+        vkCmdPushConstants(commandBuffer, _glowPipeline->getPipelineLayout(), VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(GlowPassPushConstants), &pushConstants);
+
+        vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(_sun->getDeviceMesh()->getIndicesCount()), 1, 0, 0, 0); 
+    }
     
+    for(int m=0; m<static_cast<int>(_planets.size()); m++) {
+        VkBuffer vertexBuffers[] = {_planets[m]->getDeviceMesh()->getVertexBuffer()};
+        VkDeviceSize offsets[] = {0};
+        vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets); // We can have multiple vertex buffers
+        vkCmdBindIndexBuffer(commandBuffer, _planets[m]->getDeviceMesh()->getIndexBuffer(), 0, VK_INDEX_TYPE_UINT32); // We can only use one index buffer at a time
+
+        std::array<VkDescriptorSet, 1> descriptorSets = {
+            _sceneDescriptorSets[_currentFrame]->getDescriptorSet()  // Per-frame descriptor set
+        };
+        vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, _glowPipeline->getPipelineLayout(), 0, 1, descriptorSets.data(), 0, nullptr);
+
+        // Push constants for model
+        GlowPassPushConstants pushConstants{};
+        pushConstants.model = _planets[m]->getModelMatrix();
+        pushConstants.glowColor = glm::vec3(0.f);
+        vkCmdPushConstants(commandBuffer, _glowPipeline->getPipelineLayout(), VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(GlowPassPushConstants), &pushConstants);
+
+        vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(_planets[m]->getDeviceMesh()->getIndicesCount()), 1, 0, 0, 0);
+    }
+
+    vkCmdEndRenderPass(commandBuffer);
+
+    /*
+        Second pass (Vertical Blur): Apply vertical blur to the glow pass output
+    */
+    renderPassBeginInfo.framebuffer = _offscreenFrameBuffers[1]->getFrameBuffer();
+    renderPassBeginInfo.renderArea.extent = _offscreenFrameBuffers[1]->getExtent();
+    vkCmdBeginRenderPass(commandBuffer, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+    offscreenViewport.width = _offscreenFrameBuffers[1]->getExtent().width;
+    offscreenViewport.height = _offscreenFrameBuffers[1]->getExtent().height;
+    vkCmdSetViewport(commandBuffer, 0, 1, &offscreenViewport);
+
+    offscreenScissor.extent = _offscreenFrameBuffers[1]->getExtent();
+    vkCmdSetScissor(commandBuffer, 0, 1, &offscreenScissor);
+
+    _blurVertPipeline->bind(commandBuffer);
+    std::array<VkDescriptorSet, 1> blurVertDescriptorSets = {
+        _blurVertDescriptorSet->getDescriptorSet()                 // Blur descriptor set
+    };
+    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, _blurVertPipeline->getPipelineLayout(), 0, 1, blurVertDescriptorSets.data(), 0, nullptr);
+
+    vkCmdDraw(commandBuffer, 3, 1, 0, 0); // Draw a full-screen triangle for the blur pass
+    vkCmdEndRenderPass(commandBuffer);
+
+    
+    /*
+        Third pass (Horizontal Blur): Apply horizontal blur to the vertical blur output
+    */
+    renderPassBeginInfo.framebuffer = _offscreenFrameBuffers[2]->getFrameBuffer();
+    renderPassBeginInfo.renderArea.extent = _offscreenFrameBuffers[2]->getExtent();
+    vkCmdBeginRenderPass(commandBuffer, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+    offscreenViewport.width = _offscreenFrameBuffers[2]->getExtent().width;
+    offscreenViewport.height = _offscreenFrameBuffers[2]->getExtent().height;
+    vkCmdSetViewport(commandBuffer, 0, 1, &offscreenViewport);
+
+    offscreenScissor.extent = _offscreenFrameBuffers[2]->getExtent();
+    vkCmdSetScissor(commandBuffer, 0, 1, &offscreenScissor);
+
+    _blurHorizPipeline->bind(commandBuffer);
+    std::array<VkDescriptorSet, 1> blurHorizDescriptorSets = {
+        _blurHorizDescriptorSet->getDescriptorSet()                 // Blur descriptor set
+    };
+    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, _blurHorizPipeline->getPipelineLayout(), 0, 1, blurHorizDescriptorSets.data(), 0, nullptr);
+
+    vkCmdDraw(commandBuffer, 3, 1, 0, 0); // Draw a full-screen triangle for the blur pass
+    vkCmdEndRenderPass(commandBuffer);
+
+
+    /*
+        Fourth pass (Normal Shading)
+    */
+    VkRenderPassBeginInfo mainRenderPassBeginInfo{};
+    mainRenderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+    mainRenderPassBeginInfo.renderPass = _offscreenRenderPassMSAA->getRenderPass();
+    mainRenderPassBeginInfo.framebuffer = _offscreenFrameBuffers[3]->getFrameBuffer();
+    mainRenderPassBeginInfo.renderArea.offset = { 0, 0 };
+    mainRenderPassBeginInfo.renderArea.extent = _offscreenFrameBuffers[3]->getExtent();
+    mainRenderPassBeginInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
+    mainRenderPassBeginInfo.pClearValues = clearValues.data();
+    vkCmdBeginRenderPass(commandBuffer, &mainRenderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+    offscreenViewport.width = _offscreenFrameBuffers[3]->getExtent().width;
+    offscreenViewport.height = _offscreenFrameBuffers[3]->getExtent().height;
+    vkCmdSetViewport(commandBuffer, 0, 1, &offscreenViewport);
+
+    offscreenScissor.extent = _offscreenFrameBuffers[3]->getExtent();
+    vkCmdSetScissor(commandBuffer, 0, 1, &offscreenScissor);
+
+    // Draw skybox
+
+    // Draw sun
+    _sun->draw(commandBuffer, *this);
+
+    // Draw planets
+    for (const auto& planet : _planets) {
+        planet->draw(commandBuffer, *this);
+    }
+
+    // Draw GLow spheres
+
+    // Draw orbits
+    for (const auto& orbit : _orbits) {
+        orbit->draw(commandBuffer, *this);
+    }
+
+    vkCmdEndRenderPass(commandBuffer);
+
+
+    /*
+        Fifth pass (Composite): Combine the normal rendering with the glow pass
+    */
+    VkRenderPassBeginInfo compositeRenderPassBeginInfo{};
+    compositeRenderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+    compositeRenderPassBeginInfo.renderPass = _renderPass->getRenderPass();
+    compositeRenderPassBeginInfo.framebuffer = _mainFrameBuffers[targetSwapImageIndex]->getFrameBuffer();
+    compositeRenderPassBeginInfo.renderArea.offset = { 0, 0 };
+    compositeRenderPassBeginInfo.renderArea.extent = _swapChain->getSwapChainExtent();
+    compositeRenderPassBeginInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
+    compositeRenderPassBeginInfo.pClearValues = clearValues.data();
+    vkCmdBeginRenderPass(commandBuffer, &compositeRenderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+    VkViewport viewport{};
+    viewport.x = 0.0f;
+    viewport.y = 0.0f;
+    viewport.width = (float) _swapChain->getSwapChainExtent().width;
+    viewport.height = (float) _swapChain->getSwapChainExtent().height;
+    viewport.minDepth = 0.0f;
+    viewport.maxDepth = 1.0f;
+    vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
+
+    VkRect2D scissor{};
+    scissor.offset = {0, 0};
+    scissor.extent = _swapChain->getSwapChainExtent();
+    vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
+
+    // Bind the composite pipeline
+    _compositePipeline->bind(commandBuffer);
+
+    // Bind the descriptor set for the composite pass
+    std::array<VkDescriptorSet, 1> compositeDescriptorSets = {
+        _compositeDescriptorSet->getDescriptorSet() // Composite descriptor set
+    };
+    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, _compositePipeline->getPipelineLayout(), 0, 1, compositeDescriptorSets.data(), 0, nullptr);
+
+    // Draw a full-screen quad for the composite pass
+    vkCmdDraw(commandBuffer, 3, 1, 0, 0); // Draw a full-screen triangle for the composite pass
+    vkCmdEndRenderPass(commandBuffer);
+
+    // End the command buffer recording
+    if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {
+        spdlog::error("Failed to record command buffer!");
+        return;
+    }
+
+}
+
+
+uint32_t SolarSystemScene::querySelectionImage(float mouseX, float mouseY) {
+    
+    VkCommandBuffer cmdBuffer = VulkanHelper::beginSingleTimeCommands(_ctx);
+
+    VkRenderPassBeginInfo renderPassBeginInfo{};
+    renderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+    renderPassBeginInfo.renderPass = _objectSelectionRenderPass->getRenderPass();
+    renderPassBeginInfo.framebuffer = _objectSelectionFrameBuffer->getFrameBuffer();
+    renderPassBeginInfo.renderArea.offset = { 0, 0 };
+    renderPassBeginInfo.renderArea.extent = _objectSelectionFrameBuffer->getExtent();
+
+    std::array<VkClearValue, 2> clearValues{};
+    clearValues[0].color.uint32[0] = 0;                    // Clear color (ID attachment)
+    clearValues[1].depthStencil = { 1.0f, 0 };             // Clear depth value
+    renderPassBeginInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
+    renderPassBeginInfo.pClearValues = clearValues.data();
+
+    vkCmdBeginRenderPass(cmdBuffer, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+    VkViewport viewport{};
+    viewport.x = 0.0f;
+    viewport.y = 0.0f;
+    viewport.width = (float) _objectSelectionFrameBuffer->getExtent().width;
+    viewport.height = (float) _objectSelectionFrameBuffer->getExtent().height;
+    viewport.minDepth = 0.0f;
+    viewport.maxDepth = 1.0f;
+    vkCmdSetViewport(cmdBuffer, 0, 1, &viewport);
+
+    //In Object Selection we only care about the pixel under the mouse position, set scissor rect to a 1x1 pixel under mouse
+    VkRect2D scissor{};
+    scissor.offset = {static_cast<int32_t>(mouseX), static_cast<int32_t>(mouseY)}; // Set scissor rect to mouse position
+    scissor.extent = {1, 1}; // 1x1 pixel
+    vkCmdSetScissor(cmdBuffer, 0, 1, &scissor);
+
+
+    // TODO: Should we use SelectableModel's ::drawSelection() function instead of this?
+
+    _objectSelectionPipeline->bind(cmdBuffer);
+
+    // Iterate selectable objects
+    for (const auto& pair : _selectableObjects) {
+        VkBuffer vertexBuffers[] = {pair.second->getDeviceMesh()->getVertexBuffer()};
+        VkDeviceSize offsets[] = {0};
+        vkCmdBindVertexBuffers(cmdBuffer, 0, 1, vertexBuffers, offsets); // We can have multiple vertex buffers
+        vkCmdBindIndexBuffer(cmdBuffer, pair.second->getDeviceMesh()->getIndexBuffer(), 0, VK_INDEX_TYPE_UINT32); // We can only use one index buffer at a time
+
+        std::array<VkDescriptorSet, 1> descriptorSets = {
+            _sceneDescriptorSets[_currentFrame]->getDescriptorSet()  // Per-frame descriptor set
+            // Per-model descriptor set is not needed here beacuse we dont care about material when drawing ids.
+        };
+        vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, _objectSelectionPipeline->getPipelineLayout(), 0, 1, descriptorSets.data(), 0, nullptr);
+
+        // Push constants for model
+        ObjectSelectionPushConstants pushConstants {pair.second->getModelMatrix(), pair.second->getID()};
+        vkCmdPushConstants(cmdBuffer, _objectSelectionPipeline->getPipelineLayout(), VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(ObjectSelectionPushConstants), &pushConstants);
+
+        vkCmdDrawIndexed(cmdBuffer, static_cast<uint32_t>(pair.second->getDeviceMesh()->getIndicesCount()), 1, 0, 0, 0);
+    }
+
+    vkCmdEndRenderPass(cmdBuffer);
+
+    VulkanHelper::endSingleTimeCommands(_ctx, cmdBuffer);
+
+    // Create a staging buffer to read the pixel data from the object selection image
+    VkBuffer stagingBuffer;
+    VkDeviceMemory stagingBufferMemory;
+    VkDeviceSize imageSize = _swapChain->getSwapChainExtent().width * _swapChain->getSwapChainExtent().height * sizeof(uint32_t); // Assuming 1 bytes per pixel (uint32_t)
+    VulkanHelper::createBuffer(_ctx, imageSize, 
+        VK_BUFFER_USAGE_TRANSFER_DST_BIT, 
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, 
+        stagingBuffer, stagingBufferMemory);
+
+    // Copy the object selection image to the staging buffer for reading pixel data
+    VulkanHelper::copyImageToBuffer(_ctx, _objectSelectionFrameBuffer->getColorImage(), stagingBuffer, _swapChain->getSwapChainExtent().width, _swapChain->getSwapChainExtent().height);
+
+    // Map the memory and read the pixel data
+    uint32_t* pixelData = new uint32_t[_swapChain->getSwapChainExtent().width * _swapChain->getSwapChainExtent().height];
+    void* data;
+    vkMapMemory(_ctx->device, stagingBufferMemory, 0, imageSize, 0, &data);
+    memcpy(pixelData, data, (size_t)imageSize);
+
+    // Unmap and free the staging buffer
+    vkUnmapMemory(_ctx->device, stagingBufferMemory);
+    vkDestroyBuffer(_ctx->device, stagingBuffer, nullptr);
+    vkFreeMemory(_ctx->device, stagingBufferMemory, nullptr);
+
+    // Read mouseX and mouseY pixel data
+    int mousePixel = static_cast<int>(mouseX) + static_cast<int>(mouseY) * _swapChain->getSwapChainExtent().width;
+    uint32_t selectedObjectID = pixelData[mousePixel]; // Assuming the ID is stored in the first channel
+    // spdlog::info("Selected object ID: {}", selectedObjectID);
+
+    // uint8_t* pixelData8 = new uint8_t[_swapChain->getSwapChainExtent().width * _swapChain->getSwapChainExtent().height];
+    // for (size_t i = 0; i < _swapChain->getSwapChainExtent().width * _swapChain->getSwapChainExtent().height; ++i) {
+    //     pixelData8[i] = static_cast<uint8_t>(pixelData[i]); // Convert to uint8_t if needed
+    // }
+
+    // // Save the pixel data to a file or process it as needed
+    // // For example, you can save it to a PNG file using a library like stb_image_write
+    // stbi_write_png("object_selection.png", _swapChain->getSwapChainExtent().width, _swapChain->getSwapChainExtent().height, 1, pixelData8, _swapChain->getSwapChainExtent().width);
+
+    // // Clean up
+    // delete[] pixelData8;
+
+    delete[] pixelData;
+    return selectedObjectID; // Return the selected object ID
+}
+
+
+void SolarSystemScene::handleMouseClick(float mouseX, float mouseY)
+{
+    // Call the querySelectionImage function to get the selected object ID
+    uint32_t objectID = querySelectionImage(mouseX, mouseY);
+    if (_currentTargetObjectID == objectID) return;
+
+    // Check if _selectableObjects contains the objectID
+    if (_selectableObjects.find(objectID) != _selectableObjects.end()) {
+        // key exists
+        _currentTargetObjectID = objectID; // Update the current target object ID
+        _camera->setTargetAnimated(_selectableObjects[objectID]->getPosition()); // Set the camera target to the selected object
+    }
+}
+
+
+void SolarSystemScene::handleMouseDrag(float dx, float dy)
+{
+    // Update camera based on mouse movement
+    _camera->rotateHorizontally(static_cast<float>(dx) * 0.005f);
+    _camera->rotateVertically(static_cast<float>(dy) * 0.005f);
+}
+
+
+void SolarSystemScene::handleMouseWheel(float dy)
+{
+    // Handle mouse wheel events here if needed
+    // For example, you can update the camera zoom level
+    float zoomDelta = dy * _camera->getRadius() * 0.03f; // Adjust the zoom speed as needed
+    _camera->changeZoom(zoomDelta);
 }

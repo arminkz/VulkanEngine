@@ -46,9 +46,7 @@ bool Window::initialize(const std::string& title, const uint16_t width, const ui
 
     // Create the Vulkan renderer
     _renderer = std::make_unique<Renderer>(_ctx);
-    if (!_renderer->initialize()) {
-        return false;
-    }
+    _renderer->initialize();
 
     // Always on top
     //SDL_SetWindowAlwaysOnTop(_window, true);
@@ -95,11 +93,11 @@ bool Window::eventCallback(void *userdata, SDL_Event *event)
     Window* self = static_cast<Window*>(userdata);
 
     // Pass the event to the GUI for processing
-    if(self->_renderer->getGUI()->handleEvents(event)) {
-        if (self->_renderer->getGUI()->isCapturingEvent()) {
-            return false; // Event is captured by GUI
-        }
-    }   
+    // if(self->_renderer->getGUI()->handleEvents(event)) {
+    //     if (self->_renderer->getGUI()->isCapturingEvent()) {
+    //         return false; // Event is captured by GUI
+    //     }
+    // }   
         
     // Access members of the window class
     if (event->type == SDL_EVENT_WINDOW_RESIZED) {
@@ -153,9 +151,7 @@ void Window::onMouseMotion(float x, float y)
         int deltaX = x - _lastMouseX;
         int deltaY = y - _lastMouseY;
 
-        // Update camera based on mouse movement
-        _renderer->getCamera()->rotateHorizontally(static_cast<float>(deltaX) * 0.005f);
-        _renderer->getCamera()->rotateVertically(static_cast<float>(deltaY) * 0.005f);
+        _renderer->handleMouseDrag(deltaX, deltaY);
     }
 
     _lastMouseX = x;
@@ -183,7 +179,7 @@ void Window::onMouseButtonUp(int button, float x, float y)
 void Window::onMouseWheel(float x, float y)
 {
     // Handle mouse wheel event
-    _renderer->getCamera()->changeZoom(static_cast<float>(y)); // Example function to change camera radius based on mouse wheel
+    _renderer->handleMouseWheel(y);
 }
 
 void Window::onKeyDown(int key, int scancode, int modifiers)

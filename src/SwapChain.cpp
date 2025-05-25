@@ -71,7 +71,7 @@ void SwapChain::createSwapChain()
     _swapChainImageViews.resize(_swapChainImages.size());
     for (size_t i = 0; i < _swapChainImages.size(); i++) {
         // Create image views for each swap chain image
-        _swapChainImageViews[i] = VulkanHelper::createImageView(_ctx, _swapChainImages[i], _swapChainImageFormat, 1, VK_IMAGE_ASPECT_COLOR_BIT);
+        _swapChainImageViews[i] = VulkanHelper::createImageView(_ctx, _swapChainImages[i], _swapChainImageFormat, 1, 1, VK_IMAGE_ASPECT_COLOR_BIT);
     }
     firstTimeCreation = false;
 }

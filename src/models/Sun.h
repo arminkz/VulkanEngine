@@ -1,14 +1,14 @@
 #pragma once
+
 #include "stdafx.h"
 #include "VulkanContext.h"
 #include "geometry/DeviceMesh.h"
-#include "Model.h"
 #include "Scene.h"
-#include "interface/ISelectable.h"
 #include "Pipeline.h"
+#include "interface/Model.h"
+#include "interface/SelectableModel.h"
 
-
-class Sun : public Model, public ISelectable
+class Sun : public SelectableModel
 {
 public:
     Sun(std::shared_ptr<VulkanContext> ctx, 
@@ -22,6 +22,9 @@ public:
     void drawSelection(VkCommandBuffer commandBuffer, const Scene& scene) override;
 
     void calculateModelMatrix();
+
+    // Used in Bloom effect
+    const glm::vec3 glowColor = glm::vec3(1.f, 0.3f, 0.0f);
 
 protected:
 

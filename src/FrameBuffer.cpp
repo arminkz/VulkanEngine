@@ -80,24 +80,24 @@ FrameBuffer::~FrameBuffer() {
 
 void FrameBuffer::createColorResources(VkExtent2D extent, VkFormat format, VkSampleCountFlagBits msaaSamples, VkImageUsageFlags usage) {
 
-    VulkanHelper::createImage(_ctx, extent.width, extent.height, format, 1, msaaSamples,
+    VulkanHelper::createImage(_ctx, extent.width, extent.height, format, 1, 1, msaaSamples,
         VK_IMAGE_TILING_OPTIMAL, usage, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, _colorImage, _colorImageMemory);
 
-    _colorImageView = VulkanHelper::createImageView(_ctx, _colorImage, format, 1, VK_IMAGE_ASPECT_COLOR_BIT);
+    _colorImageView = VulkanHelper::createImageView(_ctx, _colorImage, format, 1, 1, VK_IMAGE_ASPECT_COLOR_BIT);
 }
 
 void FrameBuffer::createDepthResources(VkExtent2D extent, VkFormat format, VkSampleCountFlagBits msaaSamples, VkImageUsageFlags usage) {
 
-    VulkanHelper::createImage(_ctx, extent.width, extent.height, format, 1, msaaSamples,
+    VulkanHelper::createImage(_ctx, extent.width, extent.height, format, 1, 1, msaaSamples,
         VK_IMAGE_TILING_OPTIMAL, usage, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, _depthImage, _depthImageMemory);
 
-    _depthImageView = VulkanHelper::createImageView(_ctx, _depthImage, format, 1, VK_IMAGE_ASPECT_DEPTH_BIT);
+    _depthImageView = VulkanHelper::createImageView(_ctx, _depthImage, format, 1, 1, VK_IMAGE_ASPECT_DEPTH_BIT);
 }
 
 void FrameBuffer::createResolveResources(VkExtent2D extent, VkFormat format, VkImageUsageFlags usage) {
 
-    VulkanHelper::createImage(_ctx, extent.width, extent.height, format, 1, VK_SAMPLE_COUNT_1_BIT,
+    VulkanHelper::createImage(_ctx, extent.width, extent.height, format, 1, 1, VK_SAMPLE_COUNT_1_BIT,
         VK_IMAGE_TILING_OPTIMAL, usage, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, _resolveImage, _resolveImageMemory);
 
-    _resolveImageView = VulkanHelper::createImageView(_ctx, _resolveImage, format, 1, VK_IMAGE_ASPECT_COLOR_BIT);
+    _resolveImageView = VulkanHelper::createImageView(_ctx, _resolveImage, format, 1, 1, VK_IMAGE_ASPECT_COLOR_BIT);
 }

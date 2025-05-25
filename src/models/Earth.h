@@ -1,4 +1,5 @@
 #pragma once
+
 #include "stdafx.h"
 #include "Planet.h"
 #include "VulkanContext.h"
@@ -6,6 +7,8 @@
 #include "Texture2D.h"
 #include "Pipeline.h"
 
+class Scene;
+class SolarSystemScene;
 
 class Earth : public Planet
 {

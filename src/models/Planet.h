@@ -1,13 +1,17 @@
 #pragma once
+
 #include "stdafx.h"
-#include "Model.h"
+#include "interface/Model.h"
+#include "interface/SelectableModel.h"
 #include "Texture2D.h"
-#include "../interface/ISelectable.h"
 #include "Pipeline.h"
 #include "DescriptorSet.h"
 #include "Scene.h"
 
-class Planet : public Model, public ISelectable
+class Scene;
+class SolarSystemScene;
+
+class Planet : public SelectableModel
 {
 public:
     Planet(std::shared_ptr<VulkanContext> ctx, 
@@ -34,9 +38,7 @@ protected:
     float _orbitRadius = 0.0f;                 
     float _orbitAngle = 0.0f; 
 
-private:
-
-    // Planet-specific data
     std::shared_ptr<Texture2D> _baseColorTexture;
     std::unique_ptr<DescriptorSet> _descriptorSet;
+
 };

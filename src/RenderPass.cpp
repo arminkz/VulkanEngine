@@ -12,7 +12,7 @@ RenderPass::RenderPass(std::shared_ptr<VulkanContext> ctx, RenderPassParams para
     colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
     colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
     colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    colorAttachment.finalLayout = params.colorLayout;
+    colorAttachment.finalLayout = params.colorAttachmentLayout;
 
     VkAttachmentDescription depthAttachment = {};
     depthAttachment.format = params.depthFormat;
@@ -22,7 +22,7 @@ RenderPass::RenderPass(std::shared_ptr<VulkanContext> ctx, RenderPassParams para
     depthAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
     depthAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
     depthAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    depthAttachment.finalLayout = params.depthLayout;
+    depthAttachment.finalLayout = params.depthAttachmentLayout;
 
     VkAttachmentDescription resolveAttachment{};
     resolveAttachment.format = params.resolveFormat;
@@ -32,7 +32,7 @@ RenderPass::RenderPass(std::shared_ptr<VulkanContext> ctx, RenderPassParams para
     resolveAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
     resolveAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
     resolveAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    resolveAttachment.finalLayout = params.resolveLayout;
+    resolveAttachment.finalLayout = params.resolveAttachmentLayout;
 
     std::vector<VkAttachmentDescription> attachments;
     uint32_t attachmentCount = 0;
@@ -52,9 +52,9 @@ RenderPass::RenderPass(std::shared_ptr<VulkanContext> ctx, RenderPassParams para
         resolveAttachmentIndex = attachmentCount++;
     }
 
-    VkAttachmentReference colorReference = { colorAttachmentIndex, params.colorLayout };
-    VkAttachmentReference depthReference = { depthAttachmentIndex, params.depthLayout };
-    VkAttachmentReference resolveReference = { resolveAttachmentIndex, params.resolveLayout };
+    VkAttachmentReference colorReference = { colorAttachmentIndex, params.colorReferenceLayout };
+    VkAttachmentReference depthReference = { depthAttachmentIndex, params.depthReferenceLayout };
+    VkAttachmentReference resolveReference = { resolveAttachmentIndex, params.resolveReferenceLayout };
 
     VkSubpassDescription subpass{};
     subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;

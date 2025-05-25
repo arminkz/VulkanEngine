@@ -51,7 +51,7 @@ Texture2D::Texture2D(std::shared_ptr<VulkanContext> ctx, const std::string& path
         _textureImage, _textureImageMemory);
 
     // Transition image layout to transfer destination optimal
-    VulkanHelper::transitionImageLayout(_ctx, _textureImage, _format, _mipLevels, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+    VulkanHelper::transitionImageLayout(_ctx, _textureImage, _format, _mipLevels, 1, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
     // Copy from staging buffer to the image
     VulkanHelper::copyBufferToImage(_ctx, stagingBuffer, _textureImage, static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight));
@@ -65,7 +65,35 @@ Texture2D::Texture2D(std::shared_ptr<VulkanContext> ctx, const std::string& path
     generateMipmaps(); // Generate mipmaps for the texture image
 
     // Create ImageView
-    _textureImageView = VulkanHelper::createImageView(_ctx, _textureImage, _format, _mipLevels, VK_IMAGE_ASPECT_COLOR_BIT);
+    _textureImageView = VulkanHelper::createImageView(_ctx, _textureImage, _format, _mipLevels, 1, VK_IMAGE_ASPECT_COLOR_BIT);
+
+    // Create texture sampler
+    // Retrieve the physical device properties for the texture sampler
+    VkPhysicalDeviceProperties properties{};
+    vkGetPhysicalDeviceProperties(_ctx->physicalDevice, &properties);
+
+    VkSamplerCreateInfo samplerInfo{};
+    samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+    samplerInfo.magFilter = VK_FILTER_LINEAR;
+    samplerInfo.minFilter = VK_FILTER_LINEAR;
+    samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    samplerInfo.anisotropyEnable = VK_TRUE;
+    samplerInfo.maxAnisotropy = properties.limits.maxSamplerAnisotropy;
+    samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+    samplerInfo.unnormalizedCoordinates = VK_FALSE;
+    samplerInfo.compareEnable = VK_FALSE;
+    samplerInfo.compareOp = VK_COMPARE_OP_ALWAYS;
+    samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+    samplerInfo.mipLodBias = 0.0f;
+    samplerInfo.minLod = 0.0f;
+    samplerInfo.maxLod = static_cast<float>(_mipLevels);
+
+    if(vkCreateSampler(_ctx->device, &samplerInfo, nullptr, &_textureSampler) != VK_SUCCESS) {
+        spdlog::error("Failed to create texture sampler!");
+    }
+
 }
 
 Texture2D::Texture2D(std::shared_ptr<VulkanContext> ctx, const void* pixelData, uint32_t width, uint32_t height, VkFormat format, uint32_t mipLevels)
@@ -104,7 +132,7 @@ Texture2D::Texture2D(std::shared_ptr<VulkanContext> ctx, const void* pixelData, 
         _textureImage, _textureImageMemory);
 
     // Transition image layout to transfer destination optimal
-    VulkanHelper::transitionImageLayout(_ctx, _textureImage, _format, _mipLevels, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+    VulkanHelper::transitionImageLayout(_ctx, _textureImage, _format, _mipLevels, 1, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
     // Copy from staging buffer to the image
     VulkanHelper::copyBufferToImage(_ctx, stagingBuffer, _textureImage, static_cast<uint32_t>(_width), static_cast<uint32_t>(_height));
@@ -116,7 +144,7 @@ Texture2D::Texture2D(std::shared_ptr<VulkanContext> ctx, const void* pixelData, 
     generateMipmaps();
 
     // Create ImageView
-    _textureImageView = VulkanHelper::createImageView(_ctx, _textureImage, _format, _mipLevels, VK_IMAGE_ASPECT_COLOR_BIT);
+    _textureImageView = VulkanHelper::createImageView(_ctx, _textureImage, _format, _mipLevels, 1, VK_IMAGE_ASPECT_COLOR_BIT);
 
     // Create texture sampler
     // Retrieve the physical device properties for the texture sampler

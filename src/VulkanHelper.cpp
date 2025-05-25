@@ -205,7 +205,7 @@ namespace VulkanHelper {
                      VkImageUsageFlags usage, 
                      VkMemoryPropertyFlags properties, 
                      VkImage& image, VkDeviceMemory& imageMemory,
-                     VkImageCreateFlags flags = 0) 
+                     VkImageCreateFlags flags) 
     {
         VkImageCreateInfo imageInfo{};
         imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;

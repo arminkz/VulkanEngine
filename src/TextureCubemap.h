@@ -1,3 +1,4 @@
+#pragma once
 
 #include "stdafx.h"
 #include "VulkanContext.h"
@@ -7,7 +8,7 @@
 class TextureCubemap
 {
 public:
-    TextureCubemap(std::shared_ptr<VulkanContext> ctx, std::string& path, VkFormat format);
+    TextureCubemap(std::shared_ptr<VulkanContext> ctx, const std::string& path, VkFormat format);
     ~TextureCubemap();
 
     uint32_t getWidth() const { return _width; }

@@ -1,7 +1,7 @@
 #pragma once
 #include "stdafx.h"
 #include "VulkanContext.h"
-#include "DeviceTexture.h"
+#include "Texture2D.h"
 #include "TextureSampler.h"
 #include "DescriptorSet.h"
 #include "Pipeline.h"
@@ -33,8 +33,7 @@ private:
     float _scaleFactor = 1.f;
 
     // Graphic resources that ImGui needs
-    std::unique_ptr<DeviceTexture> _fontTexture = nullptr;
-    std::unique_ptr<TextureSampler> _textureSampler = nullptr;
+    std::unique_ptr<Texture2D> _fontTexture = nullptr;
     std::unique_ptr<DescriptorSet> _descriptorSet = nullptr;
     std::unique_ptr<Pipeline> _pipeline = nullptr;
 

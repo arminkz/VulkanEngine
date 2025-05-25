@@ -5,20 +5,23 @@
 #include "Scene.h"
 #include "Pipeline.h"
 
+class Scene;
 
 class Model
 {
 public:
-    Model(std::shared_ptr<VulkanContext> ctx, std::string name, std::shared_ptr<DeviceMesh> mesh);
-    ~Model();
-
     const std::string& getName() const { return _name; }
     glm::mat4 getModelMatrix() const { return _modelMatrix; }
+    glm::vec3 getPosition() const { return glm::vec3(_modelMatrix[3]); }
+    const DeviceMesh* getDeviceMesh() const { return _mesh.get(); }
 
     virtual void draw(VkCommandBuffer commandBuffer, const Scene& scene) = 0;
-    void setPipeline(std::weak_ptr<Pipeline> pipeline) { _pipeline = std::move(pipeline); }
+    void setPipeline(std::shared_ptr<Pipeline> pipeline) { _pipeline = std::move(pipeline); }
 
 protected:
+    Model(std::shared_ptr<VulkanContext> ctx, std::string name, std::shared_ptr<DeviceMesh> mesh);
+    virtual ~Model() {};
+
     std::shared_ptr<VulkanContext> _ctx;
     std::string _name;
     std::shared_ptr<DeviceMesh> _mesh;
@@ -26,16 +29,3 @@ protected:
 
     glm::mat4 _modelMatrix;
 };
-
-
-Model::Model(std::shared_ptr<VulkanContext> ctx, std::string name, std::shared_ptr<DeviceMesh> mesh)
-    : _ctx(std::move(ctx)), _name(std::move(name)), _mesh(std::move(mesh))
-{
-    // Initialize model matrix to identity
-    _modelMatrix = glm::mat4(1.0f);
-}
-
-Model::~Model()
-{
-    // Cleanup resources if needed
-}

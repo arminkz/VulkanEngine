@@ -9,7 +9,7 @@ public:
     {
         float radius = 16.0f;
         float minRadius = 0.1f;  
-        float maxRadius = 300.0f; 
+        float maxRadius = 1000.0f; 
 
         glm::vec3 target = glm::vec3(0.);
 
@@ -25,6 +25,7 @@ public:
 
     glm::mat4 getViewMatrix();
     glm::vec3 getPosition();
+    float getRadius() const { return _radius; }
 
     void setTarget(const glm::vec3& target);
     void setTargetAnimated(const glm::vec3& target);

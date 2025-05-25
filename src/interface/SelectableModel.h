@@ -2,26 +2,24 @@
 #include "stdafx.h"
 #include "Scene.h"
 #include "Pipeline.h"
+#include "Model.h"
 
 
-class ISelectable
+class SelectableModel : public Model
 {
 public:
-    int getId() const { return _id; }
+    int getID() const { return _id; }
 
     virtual void drawSelection(VkCommandBuffer commandBuffer, const Scene& scene) = 0;
     void setSelectionPipeline(std::shared_ptr<Pipeline> pipeline) {_selectionPipeline = std::move(pipeline);}
     
 protected:
+    // Constructor automatically assigns ID
+    SelectableModel(std::shared_ptr<VulkanContext> ctx, std::string name, std::shared_ptr<DeviceMesh> mesh);
+    virtual ~SelectableModel() {}
+
     static int _nextId;
     int _id;
 
-    // Constructor automatically assigns ID
-    ISelectable() : _id(_nextId++) {}
-    virtual ~ISelectable() {}
-
-    std::shared_ptr<Pipeline> _selectionPipeline = nullptr;
+    std::weak_ptr<Pipeline> _selectionPipeline;
 };
-
-// Initialize static member
-int ISelectable::_nextId = 1;
