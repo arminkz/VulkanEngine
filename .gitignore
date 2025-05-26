@@ -1,5 +1,5 @@
 /build/
 /spv/
 
-compile_shaders_.ps1
+compile_shaders.ps1
 compile_run.ps1
