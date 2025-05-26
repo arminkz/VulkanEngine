@@ -15,7 +15,11 @@ public:
                std::string name, 
                std::shared_ptr<DeviceMesh> mesh,
                std::weak_ptr<Model> parent,
-               float planetSize = 1.0f);
+               glm::vec4 color,
+               float coeffScatter = 3.0f,
+               float powScatter = 3.0f,
+               float planetSize = 1.0f,
+               bool isLightSource = false);
 
     ~GlowSphere();
 
@@ -31,12 +35,11 @@ private:
     float _size = 1.0f;
 
     struct GlowSphereInfo {
-        alignas(16) glm::vec3 color;
+        alignas(16) glm::vec4 color;
         alignas(4) float coeffScatter = 3.0f;
         alignas(4) float powScatter = 3.0f;
         alignas(4) int isLightSource = 0;
-    };
-
+    } _glowSphereInfo;
     std::unique_ptr<UniformBuffer<GlowSphereInfo>> _glowSphereUBO;
 
     std::unique_ptr<DescriptorSet> _descriptorSet;

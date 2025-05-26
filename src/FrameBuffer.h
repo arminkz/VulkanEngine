@@ -13,13 +13,13 @@ struct FrameBufferParams
     bool hasDepth = true;
     bool hasResolve = false;
 
-    VkFormat colorFormat = VK_FORMAT_R8G8B8A8_UNORM;
+    VkFormat colorFormat = VK_FORMAT_R8G8B8A8_SRGB;
     VkImageUsageFlags colorUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
 
     VkFormat depthFormat = VK_FORMAT_D32_SFLOAT_S8_UINT;
     VkImageUsageFlags depthUsage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
 
-    VkFormat resolveFormat = VK_FORMAT_R8G8B8A8_UNORM;
+    VkFormat resolveFormat = VK_FORMAT_R8G8B8A8_SRGB;
     VkImageUsageFlags resolveUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
 
     VkSampleCountFlagBits msaaSamples = VK_SAMPLE_COUNT_1_BIT;

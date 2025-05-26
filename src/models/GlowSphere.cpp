@@ -5,9 +5,24 @@ GlowSphere::GlowSphere(std::shared_ptr<VulkanContext> ctx,
                          std::string name, 
                          std::shared_ptr<DeviceMesh> mesh,
                          std::weak_ptr<Model> parent,
-                         float planetSize)
-    : Model(ctx, std::move(name), std::move(mesh))
+                         glm::vec4 color,
+                         float coeffScatter,
+                         float powScatter,
+                         float planetSize,
+                         bool isLightSource)
+    : Model(ctx, std::move(name), std::move(mesh)), _parent(std::move(parent)), _size(planetSize)
 {
+    _glowSphereInfo.color = color;
+    _glowSphereInfo.coeffScatter = coeffScatter;
+    _glowSphereInfo.powScatter = powScatter;
+    _glowSphereInfo.isLightSource = isLightSource ? 1 : 0;
+    _glowSphereUBO = std::make_unique<UniformBuffer<GlowSphereInfo>>(_ctx);
+    _glowSphereUBO->update(_glowSphereInfo);
+
+    std::vector<Descriptor> descriptors = {
+        Descriptor(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT, 1, _glowSphereUBO->getDescriptorInfo())
+    };
+    _descriptorSet = std::make_unique<DescriptorSet>(_ctx, descriptors);
 }
 
 
@@ -48,10 +63,11 @@ void GlowSphere::draw(VkCommandBuffer commandBuffer, const Scene& scene)
     vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
     vkCmdBindIndexBuffer(commandBuffer, _mesh->getIndexBuffer(), 0, VK_INDEX_TYPE_UINT32);
 
-    std::array<VkDescriptorSet, 1> descriptorSets = {
-        ssScene->getSceneDescriptorSet()->getDescriptorSet() // Scene descriptor set
+    std::array<VkDescriptorSet, 2> descriptorSets = {
+        ssScene->getSceneDescriptorSet()->getDescriptorSet(),
+        _descriptorSet->getDescriptorSet()  // Per-model descriptor set
     };
-    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->getPipelineLayout(), 0, 1, descriptorSets.data(), 0, nullptr);
+    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->getPipelineLayout(), 0, 2, descriptorSets.data(), 0, nullptr);
 
     // Push constants for model
     vkCmdPushConstants(commandBuffer, pipeline->getPipelineLayout(), VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(glm::mat4), &_modelMatrix);

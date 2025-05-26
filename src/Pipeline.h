@@ -27,7 +27,7 @@ struct PipelineParams
     VkFrontFace frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
 
     // Multisampling
-    VkSampleCountFlagBits msaaSamples = VK_SAMPLE_COUNT_1_BIT;
+    VkSampleCountFlagBits msaaSamples = VK_SAMPLE_COUNT_1_BIT; // Why the fuck we (by we i mean fucking vulkan) dont read this from renderpass????
 
     // Depth
     bool depthTest = true;

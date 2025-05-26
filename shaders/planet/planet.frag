@@ -28,48 +28,58 @@ layout(location = 6) in vec3 normalView;
 layout(location = 0) out vec4 outColor;
 
 void main() {
-    vec3 N = normalize(worldNormal);
-    vec3 T = normalize(worldTangent);
-    // fragment tangent: after interpolation it might no longer be exactly perpendicular to N.
-    // Perform Gram-Schmidt
-    T = normalize(T - dot(T, N) * N);
-    // Bi-normal
-    vec3 B = normalize(cross(N, T));
-    mat3 TBN_to_world = mat3(T, B, N);
-    mat3 world_to_TBN = transpose(TBN_to_world); // Because its an orthonormal matrix, its inverse is just transpose.
-
     vec3 center = pc.model[3].xyz;
-
     vec3 lightPosition = vec3(0.0, 0.0, 0.0);
-    vec3 lightDir = normalize(lightPosition - center); // Calculate light direction in world space
-    vec3 lightDirTBN = world_to_TBN * lightDir;
+    vec3 lightDir = normalize(lightPosition - center); // Vector from center to light position
+    vec3 viewDir = normalize(si.cameraPosition - worldPosition.xyz); // Vector from fragment position to camera position
+    vec3 reflectDir = reflect(-lightDir, worldNormal);
 
-    vec3 normalTBN = vec3(0.0, 0.0, 1.0);
-    float normalDot = dot(normalTBN, lightDirTBN);
-    float diffuseDot = dot(normalTBN, lightDirTBN);
-    
-    float mixAmount = 1.0;
-    vec3 color = fragColor.rgb;
-    vec4 baseColor = texture(baseColorTexture, fragTexCoord);
-    color = baseColor.rgb;
+    float NdotL = dot(worldNormal, lightDir); // Normal dot Light in TBN 
 
-    vec4 unlitColor = vec4(0.0, 0.0, 0.0, 1.0);
+    vec3 unlitColor = vec3(0.0); // Unlit color, can be adjusted
+    vec3 litColor = texture(baseColorTexture, fragTexCoord).rgb;
 
-    mixAmount = 1. / (1. + exp(-20. * normalDot));
-    mixAmount *= 1.0 + 5.0 * (diffuseDot - normalDot);
-    mixAmount = clamp(mixAmount, 0.0, 1.0);
-    color = mix(unlitColor, baseColor, mixAmount).rgb;
-   
-    float reflectRatio = 0.12;
-    reflectRatio += 0.03;
+    float mixAmount = 1. / (1. + exp(-20. * (NdotL - 0.15)));
+    vec3 color = mix(unlitColor, litColor, mixAmount).rgb;
 
-    vec3 viewDir = normalize(si.cameraPosition - worldPosition.xyz);
-    vec3 viewDirTBN = world_to_TBN * viewDir;
-    vec3 reflectDirTBN = reflect(-lightDirTBN, normalTBN);
 
-    float specPower = clamp(max(dot(viewDirTBN, reflectDirTBN),0.), 0.0, 1.0);
-    color += reflectRatio * pow(specPower, 2.0) * si.lightColor;
+    //Specular
+    float specPower = dot(reflectDir, viewDir);
+    color += mixAmount * pow(specPower, 4.0) * 0.2;
+
+    // // Specular (Phong)
+    // //vec3 halfVector = normalize(lightDirTBN + viewDirTBN);
+    // float NdotR = max(dot(viewDirTBN, reflectDirTBN), 0.0);
+    // float specularStrength = 0.3; // Adjust for specular strength
+    // float shininess = 4.0;         // Adjust for sharpness
+    // float spec = pow(NdotR, shininess);
+    // vec3 specular =  spec * si.lightColor * specularStrength;
+    // if (NdotL < 0.0) {
+    //     specular = vec3(0.0);
+    // }
+
+    // // Final color
+    // vec3 litColor = ambient + diffuse + specular;
+    // vec3 unlitColor = ambient; // Unlit color, can be adjusted
+
+
 
     outColor = vec4(color, 1.0);
+
+    // float mixAmount = 1.0;
+    // mixAmount = 1. / (1. + exp(-20. * normalDot));
+    // mixAmount = clamp(mixAmount, 0.0, 1.0);
+    // vec3 color = mix(unlitColor, baseColor, mixAmount).rgb;
+   
+    // float reflectRatio = 0.15;
+
+    // vec3 viewDir = normalize(si.cameraPosition - worldPosition.xyz);
+    // vec3 viewDirTBN = world_to_TBN * viewDir;
+    // vec3 reflectDirTBN = reflect(lightDirTBN, normalTBN);
+
+    // float specPower = clamp(max(dot(viewDirTBN, -reflectDirTBN),0.), 0.0, 1.0);
+    // color += reflectRatio * pow(specPower, 2.0) * si.lightColor * max(normalDot, 0.0);
+
+    // outColor = vec4(color, 1.0);
 }
 

@@ -32,8 +32,8 @@ layout(location = 6) out vec3 normalView;
 
 void main() {
     worldPosition = pc.model * vec4(inPosition, 1.0);
-    worldNormal = (pc.model * vec4(inNormal, 0.0)).xyz;
-    worldTangent = (pc.model * vec4(inTangent, 0.0)).xyz;
+    worldNormal = normalize((pc.model * vec4(inNormal, 0.0)).xyz);
+    worldTangent = normalize((pc.model * vec4(inTangent, 0.0)).xyz);
 
     mat3 normalMatrix = transpose(inverse(mat3(si.view * pc.model)));
     normalView = normalize(normalMatrix * inNormal);

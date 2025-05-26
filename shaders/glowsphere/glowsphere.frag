@@ -17,7 +17,7 @@ layout(push_constant) uniform PushConstants {
 
 // Per-model variables that don't change a lot (set 1 is per-model descriptor set)
 layout(set = 1, binding = 0) uniform atmosphereInfo {
-    vec3 color;
+    vec4 color;
     float coeffScatter;
     float powScatter;
     int isLightSource;
@@ -49,7 +49,7 @@ void main() {
     if (ai.isLightSource == 1) {
         mixAmount = 1.0; // If it's a light source, set mixAmount to 1.0
     }
-    outColor = vec4(ai.color, intensity) * mixAmount;
+    outColor = vec4(ai.color.rgb, ai.color.a * intensity) * mixAmount;
 }
 
 

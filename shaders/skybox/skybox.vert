@@ -24,6 +24,9 @@ layout(location = 4) in vec3 inTangent;  // Vertex tangent
 layout(location = 0) out vec3 outUVW;
 
 void main() {
-    gl_Position = si.proj * si.view * pc.model * vec4(inPosition, 1.0);
+
+    mat4 viewNoTranslation = mat4(mat3(si.view));
+
+    gl_Position = si.proj * viewNoTranslation * pc.model * vec4(inPosition, 1.0);
     outUVW = inPosition;
 }

@@ -66,6 +66,8 @@ void SwapChain::createSwapChain()
     vkGetSwapchainImagesKHR(_ctx->device, _swapChain, &imageCount, _swapChainImages.data());
     
     _swapChainImageFormat = surfaceFormat.format;
+    if (firstTimeCreation) spdlog::info("Swap chain image format: {}", VulkanHelper::formatToString(_swapChainImageFormat));
+    
     _swapChainExtent = extent;
     
     _swapChainImageViews.resize(_swapChainImages.size());

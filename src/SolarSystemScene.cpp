@@ -70,12 +70,13 @@ void SolarSystemScene::createPipelines()
     glowPassPipelineParams.name = "GlowPassPipeline";
     glowPassPipelineParams.descriptorSetLayouts = {sceneDSL};
     glowPassPipelineParams.pushConstantRanges = {{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(GlowPassPushConstants)}};
-    glowPassPipelineParams.renderPass = _offscreenRenderPass->getRenderPass();
+    glowPassPipelineParams.renderPass = _offscreenRenderPassMSAA->getRenderPass();
+    glowPassPipelineParams.msaaSamples = _msaaSamples;
     _glowPipeline = std::make_unique<Pipeline>(_ctx, "spv/glow/glow_vert.spv", "spv/glow/glow_frag.spv", glowPassPipelineParams);
 
     VkDescriptorImageInfo glowPassOutputTexture{};
     glowPassOutputTexture.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    glowPassOutputTexture.imageView = _offscreenFrameBuffers[0]->getColorImageView();
+    glowPassOutputTexture.imageView = _offscreenFrameBuffers[0]->getResolveImageView();
     glowPassOutputTexture.sampler = _ppTextureSampler->getSampler();
 
 
@@ -91,7 +92,7 @@ void SolarSystemScene::createPipelines()
 
     VkDescriptorImageInfo blurVertPassOutputTexture{};
     blurVertPassOutputTexture.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    blurVertPassOutputTexture.imageView = _offscreenFrameBuffers[1]->getColorImageView();
+    blurVertPassOutputTexture.imageView = _offscreenFrameBuffers[1]->getResolveImageView();
     blurVertPassOutputTexture.sampler = _ppTextureSampler->getSampler();
 
     PipelineParams blurPassPipelineParams {};
@@ -101,7 +102,8 @@ void SolarSystemScene::createPipelines()
     blurPassPipelineParams.cullMode = VK_CULL_MODE_NONE;
     blurPassPipelineParams.descriptorSetLayouts = { _blurVertDescriptorSet->getDescriptorSetLayout() }; 
     blurPassPipelineParams.pushConstantRanges = {};
-    blurPassPipelineParams.renderPass = _offscreenRenderPass->getRenderPass();
+    blurPassPipelineParams.renderPass = _offscreenRenderPassMSAA->getRenderPass();
+    blurPassPipelineParams.msaaSamples = _msaaSamples;
     int blurDirection = 0; // 0 for vertical
     VkSpecializationMapEntry blurDirectionMapEntry = {0, 0, sizeof(int)};
     blurPassPipelineParams.fragmentShaderSpecializationInfo = VkSpecializationInfo {1, &blurDirectionMapEntry, sizeof(int), &blurDirection};
@@ -117,12 +119,12 @@ void SolarSystemScene::createPipelines()
 
     VkDescriptorImageInfo blurHorizPassOutputTexture{};
     blurHorizPassOutputTexture.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    blurHorizPassOutputTexture.imageView = _offscreenFrameBuffers[2]->getColorImageView();;
+    blurHorizPassOutputTexture.imageView = _offscreenFrameBuffers[2]->getResolveImageView();;
     blurHorizPassOutputTexture.sampler = _ppTextureSampler->getSampler();
 
     blurPassPipelineParams.name = "BlurPassPipeline - Horizontal";
     blurDirection = 1;     // 1 for horizontal
-    blurPassPipelineParams.renderPass = _offscreenRenderPass->getRenderPass();
+    blurPassPipelineParams.renderPass = _offscreenRenderPassMSAA->getRenderPass();
     _blurHorizPipeline = std::make_unique<Pipeline>(_ctx, "spv/blur/blur_vert.spv", "spv/blur/blur_frag.spv", blurPassPipelineParams);
 
 
@@ -171,16 +173,16 @@ void SolarSystemScene::createPipelines()
     _orbitPipeline = std::make_unique<Pipeline>(_ctx, "spv/orbit/orbit_vert.spv", "spv/orbit/orbit_frag.spv", orbitPipelineParams);
 
     // GlowSphere pipeline
-    // PipelineParams glowSpherePipelineParams;
-    // glowSpherePipelineParams.name = "GlowSpherePipeline";
-    // glowSpherePipelineParams.descriptorSetLayouts = {sceneDSL, _glowSpheres[0]->getDescriptorSet()->getDescriptorSetLayout()};
-    // glowSpherePipelineParams.pushConstantRanges = {{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(glm::mat4)}};
-    // glowSpherePipelineParams.renderPass = _offscreenRenderPassMSAA->getRenderPass();
-    // glowSpherePipelineParams.msaaSamples = _msaaSamples;
-    // glowSpherePipelineParams.depthTest = true;
-    // glowSpherePipelineParams.depthWrite = false;
-    // glowSpherePipelineParams.frontFace = VK_FRONT_FACE_CLOCKWISE;
-    // _glowSpherePipeline = std::make_unique<Pipeline>(_ctx, "spv/glowsphere/glowsphere_vert.spv", "spv/glowsphere/glowsphere_frag.spv", glowSpherePipelineParams);
+    PipelineParams glowSpherePipelineParams;
+    glowSpherePipelineParams.name = "GlowSpherePipeline";
+    glowSpherePipelineParams.descriptorSetLayouts = {sceneDSL, _glowSpheres[0]->getDescriptorSet()->getDescriptorSetLayout()};
+    glowSpherePipelineParams.pushConstantRanges = {{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(glm::mat4)}};
+    glowSpherePipelineParams.renderPass = _offscreenRenderPassMSAA->getRenderPass();
+    glowSpherePipelineParams.msaaSamples = _msaaSamples;
+    glowSpherePipelineParams.depthTest = true;
+    glowSpherePipelineParams.depthWrite = false;
+    glowSpherePipelineParams.frontFace = VK_FRONT_FACE_CLOCKWISE;
+    _glowSpherePipeline = std::make_unique<Pipeline>(_ctx, "spv/glowsphere/glowsphere_vert.spv", "spv/glowsphere/glowsphere_frag.spv", glowSpherePipelineParams);
 
     // SkyBox pipeline
     PipelineParams skyBoxPipelineParams;
@@ -238,10 +240,10 @@ void SolarSystemScene::connectPipelines()
         orbit->setPipeline(_orbitPipeline);
     }
 
-    // Set the pipeline for glow spheres
-    // for (const auto& glowSphere : _glowSpheres) {
-    //     glowSphere->setPipeline(_glowSpherePipeline);
-    // }
+    //Set the pipeline for glow spheres
+    for (const auto& glowSphere : _glowSpheres) {
+        glowSphere->setPipeline(_glowSpherePipeline);
+    }
 
     // Earth and sun have their own pipelines
     _sun->setPipeline(_sunPipeline);
@@ -374,7 +376,8 @@ void SolarSystemScene::createModels()
 
 
     // Glow spheres
-    // _glowSpheres.push_back(std::make_unique<GlowSphere>(_ctx, "SunGlow", sphereDMesh, _sun, sizeSun * 1.3f));
+    _glowSpheres.push_back(std::make_unique<GlowSphere>(_ctx, "SunGlow", sphereDMesh, _sun, glm::vec4(1.f, 0.3f, 0.0f, 0.4f), 0.5f, 3.0f, sizeSun * 2.f, true));
+    //TODO: need to expose these parameters in the UI
 }
 
 
@@ -382,7 +385,7 @@ void SolarSystemScene::createRenderPasses() {
     
     RenderPassParams offscreenRenderPassParams;
     offscreenRenderPassParams.name = "Offscreen Renderpass - No MSAA";
-    offscreenRenderPassParams.colorFormat = VK_FORMAT_R8G8B8A8_UNORM;
+    offscreenRenderPassParams.colorFormat = VK_FORMAT_R8G8B8A8_SRGB;
     offscreenRenderPassParams.depthFormat = VulkanHelper::findDepthFormat(_ctx);
     offscreenRenderPassParams.colorAttachmentLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
     offscreenRenderPassParams.depthAttachmentLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
@@ -393,7 +396,7 @@ void SolarSystemScene::createRenderPasses() {
     _offscreenRenderPass = std::make_unique<RenderPass>(_ctx, offscreenRenderPassParams);
 
     offscreenRenderPassParams.name = "Offscreen Renderpass - MSAA";
-    offscreenRenderPassParams.resolveFormat = VK_FORMAT_R8G8B8A8_UNORM;
+    offscreenRenderPassParams.resolveFormat = VK_FORMAT_R8G8B8A8_SRGB;
     offscreenRenderPassParams.colorAttachmentLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
     offscreenRenderPassParams.resolveAttachmentLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
     offscreenRenderPassParams.useResolve = true;
@@ -444,22 +447,24 @@ void SolarSystemScene::createFrameBuffers() {
     offscreenFrameBufferParams.hasDepth = true;
     offscreenFrameBufferParams.hasResolve = false;
     offscreenFrameBufferParams.msaaSamples = VK_SAMPLE_COUNT_1_BIT;
-    offscreenFrameBufferParams.colorFormat = VK_FORMAT_R8G8B8A8_UNORM;
+    offscreenFrameBufferParams.colorFormat = VK_FORMAT_R8G8B8A8_SRGB;
     offscreenFrameBufferParams.depthFormat = VulkanHelper::findDepthFormat(_ctx);
     offscreenFrameBufferParams.colorUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
     offscreenFrameBufferParams.depthUsage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
-    _offscreenFrameBuffers[0] = std::make_unique<FrameBuffer>(_ctx, offscreenFrameBufferParams); // Glow pass framebuffer
-    _offscreenFrameBuffers[1] = std::make_unique<FrameBuffer>(_ctx, offscreenFrameBufferParams); // Vertical blur framebuffer
-    _offscreenFrameBuffers[2] = std::make_unique<FrameBuffer>(_ctx, offscreenFrameBufferParams); // Horizontal blur framebuffer
+    // Create offscreen framebuffers without MSAA here
 
     // Offscreen Framebuffer (MSAA)
     offscreenFrameBufferParams.renderPass = _offscreenRenderPassMSAA->getRenderPass();
     offscreenFrameBufferParams.hasResolve = true;
     offscreenFrameBufferParams.msaaSamples = _msaaSamples;
-    offscreenFrameBufferParams.resolveFormat = VK_FORMAT_R8G8B8A8_UNORM;
+    offscreenFrameBufferParams.resolveFormat = VK_FORMAT_R8G8B8A8_SRGB;
     offscreenFrameBufferParams.colorUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT;
     offscreenFrameBufferParams.depthUsage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
     offscreenFrameBufferParams.resolveUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+
+    _offscreenFrameBuffers[0] = std::make_unique<FrameBuffer>(_ctx, offscreenFrameBufferParams); // Glow pass framebuffer
+    _offscreenFrameBuffers[1] = std::make_unique<FrameBuffer>(_ctx, offscreenFrameBufferParams); // Vertical blur framebuffer
+    _offscreenFrameBuffers[2] = std::make_unique<FrameBuffer>(_ctx, offscreenFrameBufferParams); // Horizontal blur framebuffer
     _offscreenFrameBuffers[3] = std::make_unique<FrameBuffer>(_ctx, offscreenFrameBufferParams); // Normal rendering framebuffer
 
     // Main Framebuffers
@@ -512,7 +517,7 @@ void SolarSystemScene::update(uint32_t currentImage)
 
     // Update SceneInfo
     _sceneInfo.view = _camera->getViewMatrix();
-    _sceneInfo.projection = glm::perspective(glm::radians(45.f), (float)swapChainExtent.width / (float)swapChainExtent.height, 0.1f, 2000.f);
+    _sceneInfo.projection = glm::perspective(glm::radians(45.f), (float)swapChainExtent.width / (float)swapChainExtent.height, 0.1f, 4000.f);
     _sceneInfo.projection[1][1] *= -1; // Invert Y axis for Vulkan
     _sceneInfo.time = time;
     _sceneInfo.cameraPosition = _camera->getPosition();
@@ -527,6 +532,9 @@ void SolarSystemScene::update(uint32_t currentImage)
     }
     for (const auto& orbit : _orbits) {
         orbit->calculateModelMatrix();
+    }
+    for (const auto& glowSphere : _glowSpheres) {
+        glowSphere->calculateModelMatrix();
     }
 }
 
@@ -555,7 +563,7 @@ void SolarSystemScene::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32
     */
     VkRenderPassBeginInfo renderPassBeginInfo{};
     renderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-    renderPassBeginInfo.renderPass = _offscreenRenderPass->getRenderPass();
+    renderPassBeginInfo.renderPass = _offscreenRenderPassMSAA->getRenderPass();
     renderPassBeginInfo.framebuffer = _offscreenFrameBuffers[0]->getFrameBuffer();
     renderPassBeginInfo.renderArea.offset = {0, 0};
     renderPassBeginInfo.renderArea.extent = _offscreenFrameBuffers[0]->getExtent();
@@ -577,29 +585,36 @@ void SolarSystemScene::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32
     offscreenScissor.extent = _offscreenFrameBuffers[0]->getExtent();
     vkCmdSetScissor(commandBuffer, 0, 1, &offscreenScissor);
 
-    // Bind glow pipeline
-    _glowPipeline->bind(commandBuffer);
+
+    // Draw sun
+    _sun->draw(commandBuffer, *this);
+
+    // Draw sun glow sphere
+    _glowSpheres[0]->draw(commandBuffer, *this);
 
     // Draw sun and planets
-    {
-        VkBuffer vertexBuffers[] = {_sun->getDeviceMesh()->getVertexBuffer()};
-        VkDeviceSize offsets[] = {0};
-        vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets); // We can have multiple vertex buffers
-        vkCmdBindIndexBuffer(commandBuffer, _sun->getDeviceMesh()->getIndexBuffer(), 0, VK_INDEX_TYPE_UINT32); // We can only use one index buffer at a time
+    // {
+    //     VkBuffer vertexBuffers[] = {_sun->getDeviceMesh()->getVertexBuffer()};
+    //     VkDeviceSize offsets[] = {0};
+    //     vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets); // We can have multiple vertex buffers
+    //     vkCmdBindIndexBuffer(commandBuffer, _sun->getDeviceMesh()->getIndexBuffer(), 0, VK_INDEX_TYPE_UINT32); // We can only use one index buffer at a time
 
-        std::array<VkDescriptorSet, 1> descriptorSets = {
-            _sceneDescriptorSets[_currentFrame]->getDescriptorSet()  // Per-frame descriptor set
-        };
-        vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, _glowPipeline->getPipelineLayout(), 0, 1, descriptorSets.data(), 0, nullptr);
+    //     std::array<VkDescriptorSet, 1> descriptorSets = {
+    //         _sceneDescriptorSets[_currentFrame]->getDescriptorSet()  // Per-frame descriptor set
+    //     };
+    //     vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, _glowPipeline->getPipelineLayout(), 0, 1, descriptorSets.data(), 0, nullptr);
 
-        // Push constants for model
-        GlowPassPushConstants pushConstants{};
-        pushConstants.model = _sun->getModelMatrix();
-        pushConstants.glowColor = _sun->glowColor;
-        vkCmdPushConstants(commandBuffer, _glowPipeline->getPipelineLayout(), VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(GlowPassPushConstants), &pushConstants);
+    //     // Push constants for model
+    //     GlowPassPushConstants pushConstants{};
+    //     pushConstants.model = _sun->getModelMatrix();
+    //     pushConstants.glowColor = _sun->glowColor;
+    //     vkCmdPushConstants(commandBuffer, _glowPipeline->getPipelineLayout(), VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(GlowPassPushConstants), &pushConstants);
 
-        vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(_sun->getDeviceMesh()->getIndicesCount()), 1, 0, 0, 0); 
-    }
+    //     vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(_sun->getDeviceMesh()->getIndicesCount()), 1, 0, 0, 0); 
+    // }
+
+    // Bind glow pipeline
+    _glowPipeline->bind(commandBuffer);
     
     for(int m=0; m<static_cast<int>(_planets.size()); m++) {
         VkBuffer vertexBuffers[] = {_planets[m]->getDeviceMesh()->getVertexBuffer()};
@@ -702,7 +717,10 @@ void SolarSystemScene::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32
         planet->draw(commandBuffer, *this);
     }
 
-    // Draw Glow spheres
+    // // Draw Glow spheres
+    // for (const auto& glowSphere : _glowSpheres) {
+    //     glowSphere->draw(commandBuffer, *this);
+    // }
 
     // Draw orbits
     for (const auto& orbit : _orbits) {

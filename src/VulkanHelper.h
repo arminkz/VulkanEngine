@@ -44,4 +44,6 @@ namespace VulkanHelper {
     VkSampleCountFlagBits getMaxMsaaSampleCount(const std::shared_ptr<VulkanContext>& ctx);
     bool hasStencilComponent(VkFormat format);
 
+    std::string formatToString(VkFormat format);
+
 }

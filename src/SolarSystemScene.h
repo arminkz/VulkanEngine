@@ -101,8 +101,8 @@ private:
     
     // Blur pass
     struct BlurSettings {
-        float blurScale = 3.0f;
-        float blurStrength = 1.f;
+        float blurScale = 2.0f;
+        float blurStrength = 1.5f;
     } blurSettings;
     std::unique_ptr<UniformBuffer<BlurSettings>> _blurSettingsUBO;
     std::unique_ptr<DescriptorSet> _blurVertDescriptorSet;
