@@ -86,6 +86,7 @@ private:
     std::vector<std::unique_ptr<GlowSphere>> _glowSpheres;
     std::unique_ptr<SkyBox> _skyBox;
     std::shared_ptr<Sun> _sun;
+    std::unique_ptr<GlowSphere> _sunGlowSphere;
     std::shared_ptr<Earth> _earth;
     std::unordered_map<int, std::shared_ptr<SelectableModel>> _selectableObjects; // Selectable objects
     void createModels();

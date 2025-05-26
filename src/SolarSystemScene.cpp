@@ -241,6 +241,7 @@ void SolarSystemScene::connectPipelines()
     }
 
     //Set the pipeline for glow spheres
+    _sunGlowSphere->setPipeline(_glowSpherePipeline);
     for (const auto& glowSphere : _glowSpheres) {
         glowSphere->setPipeline(_glowSpherePipeline);
     }
@@ -282,6 +283,7 @@ void SolarSystemScene::createModels()
     // Venus
     std::shared_ptr<Texture2D> venusColorTexture = std::make_shared<Texture2D>(_ctx, "textures/venus/4k_venus_atmosphere.jpg", VK_FORMAT_R8G8B8A8_SRGB);
     std::shared_ptr<Planet> venus = std::make_shared<Planet>(_ctx, "Venus", sphereDMesh, venusColorTexture, _sun, sizeVenus, orbitRadVenus);
+    _glowSpheres.push_back(std::make_unique<GlowSphere>(_ctx, "VenusGlow", sphereDMesh, venus, glm::vec4(0.74f, 0.69f, 0.2f, 1.f), 3.f, 4.f, sizeVenus * 1.03f, false));
     _selectableObjects[venus->getID()] = venus;
     _planets.push_back(std::move(venus));
 
@@ -293,6 +295,7 @@ void SolarSystemScene::createModels()
     std::shared_ptr<Texture2D> overlayTexture = std::make_shared<Texture2D>(_ctx, "textures/earth/8k_earth_clouds.png", VK_FORMAT_R8G8B8A8_SRGB);
     std::shared_ptr<Earth> earth = std::make_shared<Earth>(_ctx, "Earth", sphereDMesh, colorTexture, unlitTexture, normalTexture, specularTexture, overlayTexture, _sun, sizeEarth, orbitRadEarth);
     _earth = earth;
+    _glowSpheres.push_back(std::make_unique<GlowSphere>(_ctx, "EarthGlow", sphereDMesh, _earth, glm::vec4(0.45f, 0.55f, 1.f, 1.f), 3.f, 4.f, sizeEarth * 1.03f, false));
     _selectableObjects[earth->getID()] = earth;
     _planets.push_back(std::move(earth));
 
@@ -376,8 +379,12 @@ void SolarSystemScene::createModels()
 
 
     // Glow spheres
-    _glowSpheres.push_back(std::make_unique<GlowSphere>(_ctx, "SunGlow", sphereDMesh, _sun, glm::vec4(1.f, 0.3f, 0.0f, 0.4f), 0.5f, 3.0f, sizeSun * 2.f, true));
+    _sunGlowSphere = std::make_unique<GlowSphere>(_ctx, "SunGlow", sphereDMesh, _sun, glm::vec4(1.f, 0.4f, 0.0f, 0.4f), 0.5f, 3.0f, sizeSun * 2.f, true);
     //TODO: need to expose these parameters in the UI
+
+
+    
+    
 }
 
 
@@ -533,6 +540,7 @@ void SolarSystemScene::update(uint32_t currentImage)
     for (const auto& orbit : _orbits) {
         orbit->calculateModelMatrix();
     }
+    _sunGlowSphere->calculateModelMatrix();
     for (const auto& glowSphere : _glowSpheres) {
         glowSphere->calculateModelMatrix();
     }
@@ -590,7 +598,7 @@ void SolarSystemScene::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32
     _sun->draw(commandBuffer, *this);
 
     // Draw sun glow sphere
-    _glowSpheres[0]->draw(commandBuffer, *this);
+    _sunGlowSphere->draw(commandBuffer, *this);
 
     // Draw sun and planets
     // {
@@ -718,9 +726,9 @@ void SolarSystemScene::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32
     }
 
     // // Draw Glow spheres
-    // for (const auto& glowSphere : _glowSpheres) {
-    //     glowSphere->draw(commandBuffer, *this);
-    // }
+    for (const auto& glowSphere : _glowSpheres) {
+        glowSphere->draw(commandBuffer, *this);
+    }
 
     // Draw orbits
     for (const auto& orbit : _orbits) {
