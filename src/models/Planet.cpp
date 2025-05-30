@@ -8,13 +8,21 @@ Planet::Planet(std::shared_ptr<VulkanContext> ctx,
                std::shared_ptr<Texture2D> baseColorTexture,
                std::weak_ptr<Model> parent,
                float planetSize,
-               float orbitRadius)
+               float orbitRadius,
+               float orbitAtT0,
+               float orbitPerSec,
+               float spinAtT0,
+               float spinPerSec)
 
     : SelectableModel(ctx, std::move(name), std::move(mesh)),
     _baseColorTexture(std::move(baseColorTexture)),
     _parent(std::move(parent)),
     _size(planetSize),
-    _orbitRadius(orbitRadius)
+    _orbitRadius(orbitRadius),
+    _orbitAtT0(orbitAtT0),
+    _orbitPerSec(orbitPerSec),
+    _spinAtT0(spinAtT0),
+    _spinPerSec(spinPerSec)
 {
     std::vector<Descriptor> descriptors = {
         Descriptor(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 1, _baseColorTexture->getDescriptorInfo()), // Base color texture
@@ -29,7 +37,7 @@ Planet::~Planet()
 }
 
 
-void Planet::calculateModelMatrix()
+void Planet::calculateModelMatrix(float t)
 {
     // Calculate position based on parent's position and orbit radius
     glm::vec3 parentPosition = glm::vec3(0.0f);
@@ -38,10 +46,18 @@ void Planet::calculateModelMatrix()
     }
 
     // Calculate the new position based on the orbit radius and angle
-    glm::vec3 newPosition = parentPosition + glm::vec3(_orbitRadius * cos(_orbitAngle), 0.0f, _orbitRadius * sin(_orbitAngle));
+    glm::vec3 newPosition = parentPosition + glm::vec3(
+        _orbitRadius * cos(-glm::radians(_orbitAtT0 + _orbitPerSec * t)),
+        0.0f,
+        _orbitRadius * sin(-glm::radians(_orbitAtT0 + _orbitPerSec * t))
+    );
+
+    glm::mat4 rotation90 = glm::rotate(glm::mat4(1.0f), glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+
+    glm::mat4 spin = glm::rotate(glm::mat4(1.0f), glm::radians(_spinAtT0 + _spinPerSec * t), glm::vec3(0.0f, 1.0f, 0.0f));
 
     // Update the model matrix
-    _modelMatrix = glm::translate(glm::mat4(1.0f), newPosition) * glm::scale(glm::mat4(1.0f), glm::vec3(_size));
+    _modelMatrix = glm::translate(glm::mat4(1.0f), newPosition) * glm::scale(glm::mat4(1.0f), glm::vec3(_size)) * spin * rotation90;
 }
 
 

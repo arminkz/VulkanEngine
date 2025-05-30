@@ -144,4 +144,56 @@ private:
     const float orbitRadUranus = 238.f;
     const float orbitRadNeptune = 278.f;
     const float orbitRadPluto = 310.f;
+
+    // Angle offset (t = 0)
+    const float orbitAtT0Mercury = 252.25f;
+    const float orbitAtT0Venus = 181.97f;
+    const float orbitAtT0Earth = 100.46f;
+    const float orbitAtT0Moon = 0.f;
+    const float orbitAtT0Mars = 355.45f; 
+    const float orbitAtT0Jupiter = 34.40f; 
+    const float orbitAtT0Saturn = 49.94f;
+    const float orbitAtT0Uranus = 313.23f;
+    const float orbitAtT0Neptune = 304.88f;
+    const float orbitAtT0Pluto = 238.92f;
+
+    // Orbit speeds (degrees per second)
+    const float orbitSpeedMercury = 0.0040f;
+    const float orbitSpeedVenus = 0.0016f;
+    const float orbitSpeedEarth = 0.0009f;
+    const float orbitSpeedMoon = 0.01f;
+    const float orbitSpeedMars = 0.0005f;
+    const float orbitSpeedJupiter = 0.00008f;
+    const float orbitSpeedSaturn = 0.00003f;
+    const float orbitSpeedUranus = 	0.00001f;
+    const float orbitSpeedNeptune = 0.000006f;
+    const float orbitSpeedPluto = 0.000004f;
+
+    // Spin angles at t = 0 (degrees)
+    const float spinAtT0Mercury = 0.f;
+    const float spinAtT0Venus = 177.36f;
+    const float spinAtT0Earth = 0.f;
+    const float spinAtT0Moon = 0.f;
+    const float spinAtT0Mars = 0.f;
+    const float spinAtT0Jupiter = 0.f;
+    const float spinAtT0Saturn = 0.f;
+    const float spinAtT0Uranus = 97.77f;
+    const float spinAtT0Neptune = 30.07f;
+    const float spinAtT0Pluto = 122.53f;
+
+    // Spin speed (degrees per second)
+    const float spinSpeedMercury = 0.007f;
+    const float spinSpeedVenus = -0.0017f;
+    const float spinSpeedEarth = 0.041f;
+    const float spinSpeedMoon = 0.0159f;
+    const float spinSpeedMars = 0.40f;
+    const float spinSpeedJupiter = 1.0096f;
+    const float spinSpeedSaturn = 0.9397f;
+    const float spinSpeedUranus = -0.6f;
+    const float spinSpeedNeptune = 0.62f;
+    const float spinSpeedPluto = -0.26f;
+
+
+
+
 };

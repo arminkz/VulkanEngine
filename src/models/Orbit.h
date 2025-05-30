@@ -15,17 +15,21 @@ public:
           std::string name, 
           std::shared_ptr<DeviceMesh> mesh,
           std::weak_ptr<Model> parent,
-          float orbitSize);
+          float orbitSize,
+          float orbitAtT0,
+          float orbitPerSec);
 
     ~Orbit();
 
     void draw(VkCommandBuffer commandBuffer, const Scene& scene) override;
 
-    void calculateModelMatrix();
+    void calculateModelMatrix(float t);
 
 protected:
 
     std::weak_ptr<Model> _parent; // Weak pointer to parent planet (if any)
     
     float _orbitSize = 1.0f;           // Used for scaling the model
+    float _orbitAtT0 = 0.0f;           // Initial orbit angle
+    float _orbitPerSec = 0.0f;         // Orbit speed
 };

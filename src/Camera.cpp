@@ -50,8 +50,13 @@ glm::vec3 Camera::getPosition() {
 }
 
 void Camera::setTarget(const glm::vec3& target) {
-    _target = target;
-    _viewMatrix = glm::lookAt(_target + _radius * -1.f * _forward, _target, _up);
+    if (_isAnimating) {
+        _animationEndTarget = target;
+    } 
+    else {
+        _target = target;
+        _viewMatrix = glm::lookAt(_target + _radius * -1.f * _forward, _target, _up);
+    }
 }
 
 void Camera::setTargetAnimated(const glm::vec3& target) {

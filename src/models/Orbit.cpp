@@ -5,10 +5,14 @@ Orbit::Orbit(std::shared_ptr<VulkanContext> ctx,
              std::string name, 
              std::shared_ptr<DeviceMesh> mesh,
              std::weak_ptr<Model> parent,
-             float orbitSize)
+             float orbitSize,
+             float orbitAtT0,
+             float orbitPerSec)
     : Model(ctx, std::move(name), std::move(mesh)), 
       _parent(std::move(parent)),
-      _orbitSize(orbitSize)
+      _orbitSize(orbitSize),
+      _orbitAtT0(orbitAtT0),
+      _orbitPerSec(orbitPerSec)
 {
 }
 
@@ -19,19 +23,19 @@ Orbit::~Orbit()
 }
 
 
-void Orbit::calculateModelMatrix()
+void Orbit::calculateModelMatrix(float t)
 {
     glm::vec3 parentPosition = glm::vec3(0.0f);
     if (auto parent = _parent.lock()) {
         parentPosition = parent->getPosition();
     }
 
-    glm::mat4 rotation90 = glm::rotate(glm::mat4(1.0f), glm::radians(90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+    glm::mat4 spin = glm::rotate(glm::mat4(1.0f), glm::radians(_orbitAtT0 + _orbitPerSec * t), glm::vec3(0.0f, 1.0f, 0.0f));
     glm::mat4 scale = glm::scale(glm::mat4(1.0f), glm::vec3(_orbitSize * 2.0f));
     glm::mat4 translation = glm::translate(glm::mat4(1.0f), parentPosition);
 
     // Update the model matrix
-    _modelMatrix = translation * scale * rotation90;
+    _modelMatrix = translation * scale * spin;
 }
 
 
