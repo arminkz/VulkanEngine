@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# This script compiles GLSL shaders to SPIR-V using glslc
+# This script compiles GLSL shaders to SPIR-V using glslangValidator
 
 # Colors
 RED='\033[0;31m'
@@ -13,8 +13,8 @@ NC='\033[0m' # No Color
 # Path to shader source folder
 SHADER_FOLDER="shaders"
 
-# Path to glslc (make sure it's in your PATH or set full path here)
-GLSLC_PATH="glslc"
+# Path to glslangValidator (make sure it's in your PATH or set full path here)
+GLSLANG_PATH="glslangValidator"
 
 # Output folder
 OUTPUT_FOLDER="spv"
@@ -26,27 +26,24 @@ mkdir -p "$OUTPUT_FOLDER"
 SHADER_FOLDER_FULL=$(realpath "$SHADER_FOLDER")
 OUTPUT_FOLDER_FULL=$(realpath "$OUTPUT_FOLDER")
 
-# Find all files in the shader folder recursively
-find "$SHADER_FOLDER_FULL" -type f | while read -r INPUT_FILE; do
-    # Get relative path to shader root
+# Find all shader files
+find "$SHADER_FOLDER_FULL" -type f \( -name "*.vert" -o -name "*.frag" -o -name "*.comp" -o -name "*.geom" -o -name "*.tesc" -o -name "*.tese" \) | while read -r INPUT_FILE; do
+    # Get relative path
     RELATIVE_PATH="${INPUT_FILE#$SHADER_FOLDER_FULL/}"
-
-    # Get relative directory and ensure it exists in the output directory
     RELATIVE_DIR=$(dirname "$RELATIVE_PATH")
     TARGET_DIR="$OUTPUT_FOLDER_FULL/$RELATIVE_DIR"
     mkdir -p "$TARGET_DIR"
 
-    # Get base filename and extension
+    # Get base filename
     BASENAME=$(basename "$INPUT_FILE")
-    NAME="${BASENAME%.*}"
     EXT="${BASENAME##*.}"
+    NAME="${BASENAME%.*}"
 
-    # Create output filename
-    OUTPUT_FILE="$TARGET_DIR/${NAME}_${EXT}.spv"
+    OUTPUT_FILE="$TARGET_DIR/${NAME}.${EXT}.spv"
 
     echo -e "${BLUE}Compiling ${YELLOW}$RELATIVE_PATH${NC} -> ${GREEN}${OUTPUT_FILE#$OUTPUT_FOLDER_FULL/}${NC}..."
 
-    "$GLSLC_PATH" "$INPUT_FILE" -o "$OUTPUT_FILE"
+    "$GLSLANG_PATH" -V "$INPUT_FILE" -o "$OUTPUT_FILE"
     if [ $? -ne 0 ]; then
         echo -e "${RED}Failed to compile ${RELATIVE_PATH}${NC}" >&2
     else
@@ -54,4 +51,4 @@ find "$SHADER_FOLDER_FULL" -type f | while read -r INPUT_FILE; do
     fi
 done
 
-echo "Done."
+echo -e "${CYAN}Done.${NC}"
