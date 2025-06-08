@@ -34,16 +34,6 @@ void Renderer::initialize()
 
     // Initialize Scene
     _scene = std::make_unique<SolarSystemScene>(_ctx, _swapChain);
-
-
-    //Sun atmosphere
-    // glm::mat4 sunAtmosphereModelMat = glm::mat4(1.f);
-    // sunAtmosphereModelMat = glm::scale(sunAtmosphereModelMat, glm::vec3(sizeSun * 1.3f));
-    // std::shared_ptr<AtmosphereModel> sunAtmosphere = std::make_shared<AtmosphereModel>(_ctx, sphereDMesh, sunAtmosphereModelMat, glm::vec3(1.f, 0.3f, 0.0f), 0.4f, 2.0f, true);
-    // _atmosphereModels.push_back(sunAtmosphere);
-    //_sunGlowModel = sunAtmosphere;
-    //_allModels.push_back(sunAtmosphere);
-    
     
     // Create ImGUI
     // _gui = std::make_unique<GUI>(_ctx);
@@ -89,31 +79,6 @@ void Renderer::invalidate()
 // }
 
 
-// void Renderer::updateUniformBuffer(uint32_t currentImage) {
-//     static auto startTime = std::chrono::high_resolution_clock::now();
-//     auto currentTime = std::chrono::high_resolution_clock::now();
-
-//     float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
-
-//     // Update camera position based on time
-//     _camera->advanceAnimation(time - _sceneInfo.time);
-
-//     // Rotate earth
-//     float earthRotationSpeed = 0.002f; // Adjust this value to control the rotation speed
-//     //float earthRotationAngle = time * earthRotationSpeed;
-//     _planetModels[4]->setModelMatrix(glm::rotate(_planetModels[4]->getModelMatrix(), earthRotationSpeed, glm::vec3(0.f, 0.f, 1.f)));
-
-//     // Update SceneInfo UBO
-//     _sceneInfo.view = _camera->getViewMatrix();
-//     _sceneInfo.projection = glm::perspective(glm::radians(45.f), (float)_swapChain->getSwapChainExtent().width / (float)_swapChain->getSwapChainExtent().height, 0.1f, 1000.f);
-//     _sceneInfo.projection[1][1] *= -1; // Invert Y axis for Vulkan
-//     _sceneInfo.time = time;
-//     _sceneInfo.cameraPosition = _camera->getPosition();
-//     _sceneInfoUBOs[currentImage]->update(_sceneInfo);
-// }
-
-
-
 void Renderer::createCommandBuffers() {
     // Allocate command buffer
     _commandBuffers.resize(MAX_FRAMES_IN_FLIGHT);
@@ -133,8 +98,8 @@ void Renderer::createCommandBuffers() {
 
 
 void Renderer::createSyncObjects() {
-    _imageAvailableSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
-    _renderFinishedSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
+    _imageAvailableSemaphores.resize(_swapChain->getSwapChainImageCount());
+    _renderFinishedSemaphores.resize(_swapChain->getSwapChainImageCount());
     _inFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
 
     VkSemaphoreCreateInfo semaphoreInfo{};
@@ -144,21 +109,26 @@ void Renderer::createSyncObjects() {
     fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
     fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT; //Initially signaled
 
-    for(size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+    for (size_t i = 0; i < _swapChain->getSwapChainImageCount(); i++) {
         if (vkCreateSemaphore(_ctx->device, &semaphoreInfo, nullptr, &_imageAvailableSemaphores[i]) != VK_SUCCESS ||
-            vkCreateSemaphore(_ctx->device, &semaphoreInfo, nullptr, &_renderFinishedSemaphores[i]) != VK_SUCCESS ||
-            vkCreateFence(_ctx->device, &fenceInfo, nullptr, &_inFlightFences[i]) != VK_SUCCESS) {
-            spdlog::error("Failed to create semaphores / fences for frame {}!", i);
+            vkCreateSemaphore(_ctx->device, &semaphoreInfo, nullptr, &_renderFinishedSemaphores[i]) != VK_SUCCESS) {
+            spdlog::error("Failed to create semaphores for swap chain image {}!", i);
+        }
+    }
+
+    for(size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+        if (vkCreateFence(_ctx->device, &fenceInfo, nullptr, &_inFlightFences[i]) != VK_SUCCESS) {
+            spdlog::error("Failed to create fences for frame {}!", i);
         }
     }
 }
 
 
 void Renderer::drawFrame() {
-    vkWaitForFences(_ctx->device, 1, &_inFlightFences[_currentFrame], VK_TRUE, UINT64_MAX);
+    vkWaitForFences(_ctx->device, 1, &_inFlightFences[_frameCounter], VK_TRUE, UINT64_MAX);
 
     uint32_t imageIndex;
-    VkResult result = vkAcquireNextImageKHR(_ctx->device, _swapChain->getSwapChain(), UINT64_MAX, _imageAvailableSemaphores[_currentFrame], VK_NULL_HANDLE, &imageIndex);
+    VkResult result = vkAcquireNextImageKHR(_ctx->device, _swapChain->getSwapChain(), UINT64_MAX, _imageAvailableSemaphores[_imageCounter], VK_NULL_HANDLE, &imageIndex);
 
     if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
         invalidate();
@@ -169,8 +139,8 @@ void Renderer::drawFrame() {
     }
 
     // Reset the fence before drawing
-    vkResetFences(_ctx->device, 1, &_inFlightFences[_currentFrame]);
-    vkResetCommandBuffer(_commandBuffers[_currentFrame], 0);
+    vkResetFences(_ctx->device, 1, &_inFlightFences[_frameCounter]);
+    vkResetCommandBuffer(_commandBuffers[_frameCounter], 0);
 
     // Update ImGui frame
     // _gui->newFrame();
@@ -195,28 +165,28 @@ void Renderer::drawFrame() {
     // updateUniformBuffer(_currentFrame);
 
     // Update Scene
-    _scene->update(_currentFrame);
+    _scene->update(_frameCounter);
 
     // Record command buffer
-    _scene->recordCommandBuffer(_commandBuffers[_currentFrame], imageIndex);
+    _scene->recordCommandBuffer(_commandBuffers[_frameCounter], imageIndex);
 
     VkSubmitInfo submitInfo{};
     submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 
-    VkSemaphore waitSemaphores[] = {_imageAvailableSemaphores[_currentFrame]};
+    VkSemaphore waitSemaphores[] = {_imageAvailableSemaphores[_imageCounter]};
     VkPipelineStageFlags waitStages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
     submitInfo.waitSemaphoreCount = 1;
     submitInfo.pWaitSemaphores = waitSemaphores;
     submitInfo.pWaitDstStageMask = waitStages;
 
     submitInfo.commandBufferCount = 1;
-    submitInfo.pCommandBuffers = &_commandBuffers[_currentFrame];
+    submitInfo.pCommandBuffers = &_commandBuffers[_frameCounter];
 
-    VkSemaphore signalSemaphores[] = {_renderFinishedSemaphores[_currentFrame]};
+    VkSemaphore signalSemaphores[] = {_renderFinishedSemaphores[_imageCounter]};
     submitInfo.signalSemaphoreCount = 1;
     submitInfo.pSignalSemaphores = signalSemaphores;
 
-    if (vkQueueSubmit(_ctx->graphicsQueue, 1, &submitInfo, _inFlightFences[_currentFrame]) != VK_SUCCESS) {
+    if (vkQueueSubmit(_ctx->graphicsQueue, 1, &submitInfo, _inFlightFences[_frameCounter]) != VK_SUCCESS) {
         spdlog::error("Failed to submit draw command buffer!");
         return;
     }
@@ -242,7 +212,8 @@ void Renderer::drawFrame() {
         spdlog::error("Failed to present swap chain image!");
     }
 
-    _currentFrame = (_currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
+    _frameCounter = (_frameCounter + 1) % MAX_FRAMES_IN_FLIGHT;
+    _imageCounter = (_imageCounter + 1) % _swapChain->getSwapChainImageCount();
 }
 
 

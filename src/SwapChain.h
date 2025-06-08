@@ -17,6 +17,7 @@ public:
     VkExtent2D getSwapChainExtent() const { return _swapChainExtent; }
     const std::vector<VkImage>& getSwapChainImages() const { return _swapChainImages; }
     const std::vector<VkImageView>& getSwapChainImageViews() const { return _swapChainImageViews; }
+    const int getSwapChainImageCount() const { return static_cast<int>(_swapChainImages.size()); }
 
 private:
     std::shared_ptr<VulkanContext> _ctx;

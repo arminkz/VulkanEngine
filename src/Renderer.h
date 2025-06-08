@@ -61,7 +61,9 @@ private:
     std::vector<VkSemaphore> _renderFinishedSemaphores;
     std::vector<VkFence> _inFlightFences;
     void createSyncObjects();
-
-    uint32_t _currentFrame = 0;
+    
     bool _framebufferResized = false;
+
+    uint32_t _frameCounter = 0;
+    uint32_t _imageCounter = 0;
 };
